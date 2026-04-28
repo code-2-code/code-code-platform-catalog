@@ -40,7 +40,7 @@ func TestPostgresDefinitionListPredicateBuildsModelFilters(t *testing.T) {
 func TestPostgresDefinitionListPredicateBuildsScanFilters(t *testing.T) {
 	t.Parallel()
 
-	filter, err := parseDefinitionListFilter(`model_id_query=GPT_% AND source_id=nvidia-integrate`)
+	filter, err := parseDefinitionListFilter(`query=GPT_% AND source_id=nvidia-integrate`)
 	if err != nil {
 		t.Fatalf("parseDefinitionListFilter() error = %v", err)
 	}
@@ -50,7 +50,7 @@ func TestPostgresDefinitionListPredicateBuildsScanFilters(t *testing.T) {
 	}
 
 	whereSQL, args := predicate.where()
-	for _, want := range []string{"like", "escape '\\'", "exists", "source_id = any"} {
+	for _, want := range []string{"like", "escape '\\'", "exists", "source_id = any", "source_model_id", "alias_value"} {
 		if !strings.Contains(whereSQL, want) {
 			t.Fatalf("predicate sql missing %q: %s", want, whereSQL)
 		}
@@ -82,7 +82,7 @@ func containsArg(args []any, want any) bool {
 
 func BenchmarkPostgresDefinitionListPredicateBuildsScanFilters(b *testing.B) {
 	filter := fmt.Sprintf(
-		"vendor_id=openai,anthropic,google AND model_id_query=gpt AND source_id=%s,%s,%s AND badge=free",
+		"vendor_id=openai,anthropic,google AND query=gpt AND source_id=%s,%s,%s AND badge=free",
 		models.SourceIDOpenRouter,
 		models.SourceIDGitHubModels,
 		models.SourceIDCerebras,

@@ -52,11 +52,11 @@ func parseDefinitionListFilter(raw string) (*modelservicev1.ModelListFilter, err
 				return nil, validationError("model_id filter does not support multiple values")
 			}
 			filter.ModelId = values[0]
-		case "model_id_query", "name_query":
+		case "query":
 			if len(values) != 1 {
-				return nil, validationError("model_id_query filter does not support multiple values")
+				return nil, validationError("query filter does not support multiple values")
 			}
-			filter.ModelIdQuery = values[0]
+			filter.Query = values[0]
 		case "source_id":
 			normalized := models.NormalizeDefinitionSourceIDs(values)
 			if len(normalized) == 0 {

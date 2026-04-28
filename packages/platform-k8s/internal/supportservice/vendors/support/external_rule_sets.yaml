@@ -21,6 +21,26 @@ ruleSets:
         resolution: dns
         sourceServiceAccounts:
           - code-code/platform-agent-runtime-service
+      - ruleId: mistral-api
+        destinationId: vendor.mistral.api
+        displayName: Mistral API
+        hostExact: api.mistral.ai
+        port: 443
+        protocol: tls
+        resolution: dns
+        sourceServiceAccounts:
+          - code-code/platform-agent-runtime-service
+          - code-code/platform-provider-service
+          - code-code/provider-host-blackbox-exporter
+      - ruleId: mistral-console
+        destinationId: vendor.mistral.console
+        displayName: Mistral Console
+        hostExact: console.mistral.ai
+        port: 443
+        protocol: tls
+        resolution: dns
+        sourceServiceAccounts:
+          - code-code/platform-provider-service
   - ruleSetId: support.external-rule-set.l7-smoke
     displayName: L7 Smoke External Rule Set
     ownerService: platform-support-service

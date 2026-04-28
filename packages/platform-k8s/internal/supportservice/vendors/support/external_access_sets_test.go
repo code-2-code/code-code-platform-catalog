@@ -1,6 +1,7 @@
 package support
 
 import (
+	"slices"
 	"testing"
 
 	egressv1 "code-code.internal/go-contract/egress/v1"
@@ -15,10 +16,10 @@ func TestPresetExternalRuleSetsProjectToExternalAccessSets(t *testing.T) {
 	if got, want := accessSet.GetAccessSetId(), "support.external-rule-set.bootstrap"; got != want {
 		t.Fatalf("access set id = %q, want %q", got, want)
 	}
-	if got, want := len(accessSet.GetExternalRules()), 2; got != want {
+	if got, want := len(accessSet.GetExternalRules()), 4; got != want {
 		t.Fatalf("external rules = %d, want %d", got, want)
 	}
-	if got, want := len(accessSet.GetServiceRules()), 2; got != want {
+	if got, want := len(accessSet.GetServiceRules()), 4; got != want {
 		t.Fatalf("service rules = %d, want %d", got, want)
 	}
 	if got, want := len(accessSet.GetHttpRoutes()), 0; got != want {
@@ -31,6 +32,26 @@ func TestPresetExternalRuleSetsProjectToExternalAccessSets(t *testing.T) {
 	openaiRule := externalRuleByDestination(t, accessSet, "protocol.openai-compatible.api")
 	if got, want := openaiRule.GetHostMatch().GetHostExact(), "api.openai.com"; got != want {
 		t.Fatalf("openai host exact = %q, want %q", got, want)
+	}
+	mistralRule := externalRuleByDestination(t, accessSet, "vendor.mistral.api")
+	if got, want := mistralRule.GetHostMatch().GetHostExact(), "api.mistral.ai"; got != want {
+		t.Fatalf("mistral host exact = %q, want %q", got, want)
+	}
+	mistralServiceRule := serviceRuleByDestination(t, accessSet, "vendor.mistral.api")
+	if got, want := mistralServiceRule.GetSourceServiceAccounts(), []string{
+		"code-code/platform-agent-runtime-service",
+		"code-code/platform-provider-service",
+		"code-code/provider-host-blackbox-exporter",
+	}; !slices.Equal(got, want) {
+		t.Fatalf("mistral source service accounts = %v, want %v", got, want)
+	}
+	mistralConsoleRule := externalRuleByDestination(t, accessSet, "vendor.mistral.console")
+	if got, want := mistralConsoleRule.GetHostMatch().GetHostExact(), "console.mistral.ai"; got != want {
+		t.Fatalf("mistral console host exact = %q, want %q", got, want)
+	}
+	mistralConsoleServiceRule := serviceRuleByDestination(t, accessSet, "vendor.mistral.console")
+	if got, want := mistralConsoleServiceRule.GetSourceServiceAccounts(), []string{"code-code/platform-provider-service"}; !slices.Equal(got, want) {
+		t.Fatalf("mistral console source service accounts = %v, want %v", got, want)
 	}
 }
 
@@ -133,6 +154,16 @@ func TestPresetProxyProjectsToExternalAccessSet(t *testing.T) {
 	if got, want := rule.GetResolution(), egressv1.EgressResolution_EGRESS_RESOLUTION_NONE; got != want {
 		t.Fatalf("resolution = %v, want %v", got, want)
 	}
+	if got, want := len(accessSet.GetServiceRules()), 1; got != want {
+		t.Fatalf("service rules = %d, want %d", got, want)
+	}
+	serviceRule := accessSet.GetServiceRules()[0]
+	if got, want := serviceRule.GetDestinationId(), "preset-proxy"; got != want {
+		t.Fatalf("service rule destination = %q, want %q", got, want)
+	}
+	if got, want := serviceRule.GetSourceServiceAccounts(), []string{"code-code/platform-support-service"}; !slices.Equal(got, want) {
+		t.Fatalf("source service accounts = %v, want %v", got, want)
+	}
 }
 
 func TestStartupExternalAccessSetsIncludesOnlyNetworkOwnedSets(t *testing.T) {
@@ -156,5 +187,16 @@ func externalRuleByDestination(t *testing.T, accessSet *egressv1.ExternalAccessS
 		}
 	}
 	t.Fatalf("external rule destination %q not found", destinationID)
+	return nil
+}
+
+func serviceRuleByDestination(t *testing.T, accessSet *egressv1.ExternalAccessSet, destinationID string) *egressv1.ServiceRule {
+	t.Helper()
+	for _, rule := range accessSet.GetServiceRules() {
+		if rule.GetDestinationId() == destinationID {
+			return rule
+		}
+	}
+	t.Fatalf("service rule destination %q not found", destinationID)
 	return nil
 }

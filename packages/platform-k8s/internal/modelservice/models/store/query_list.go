@@ -135,8 +135,8 @@ func (p *postgresDefinitionListPredicate) apply(filter *modelservicev1.ModelList
 			p.add("badges @> " + p.arg(string(raw)) + "::jsonb")
 		}
 	}
-	if strings.TrimSpace(filter.GetModelIdQuery()) != "" {
-		p.add("lower(model_id) like " + p.arg(likeContainsPattern(filter.GetModelIdQuery())) + " escape '\\'")
+	if strings.TrimSpace(filter.GetQuery()) != "" {
+		p.addSearch(filter.GetQuery())
 	}
 	if len(filter.GetSourceIds()) > 0 {
 		p.add(fmt.Sprintf(`exists (
@@ -160,6 +160,68 @@ where observations.namespace = %s.namespace
 		}
 	}
 	return nil
+}
+
+func (p *postgresDefinitionListPredicate) addSearch(raw string) {
+	query := strings.TrimSpace(raw)
+	if query == "" {
+		return
+	}
+	pattern := likeContainsPattern(query)
+	p.add(fmt.Sprintf(`(
+lower(model_id) like %s escape '\'
+or lower(replace(model_id, '-', ' ')) like %s escape '\'
+or lower(vendor_id) like %s escape '\'
+or lower(replace(vendor_id, '-', ' ')) like %s escape '\'
+or lower(coalesce(definition->>'display_name', '')) like %s escape '\'
+or lower(coalesce(definition->>'canonical_model_id', '')) like %s escape '\'
+or lower(coalesce(definition->>'family_slug', '')) like %s escape '\'
+or lower(replace(coalesce(definition->>'family_slug', ''), '-', ' ')) like %s escape '\'
+or exists (
+  select 1 from %s aliases
+  where aliases.namespace = %s.namespace
+    and aliases.vendor_id = %s.vendor_id
+    and aliases.model_id = %s.model_id
+    and (
+      lower(aliases.alias_value) like %s escape '\'
+      or lower(replace(aliases.alias_value, '-', ' ')) like %s escape '\'
+    )
+)
+or exists (
+  select 1 from %s observations
+  where observations.namespace = %s.namespace
+    and observations.vendor_id = %s.vendor_id
+    and observations.model_id = %s.model_id
+    and (
+      lower(observations.source_id) like %s escape '\'
+      or lower(replace(observations.source_id, '-', ' ')) like %s escape '\'
+      or lower(coalesce(observations.source_model_id, '')) like %s escape '\'
+      or lower(replace(coalesce(observations.source_model_id, ''), '-', ' ')) like %s escape '\'
+    )
+)`,
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		modelRegistryAliasesTable,
+		modelRegistryEntriesTable,
+		modelRegistryEntriesTable,
+		modelRegistryEntriesTable,
+		p.arg(pattern),
+		p.arg(pattern),
+		modelRegistryObservationsTable,
+		modelRegistryEntriesTable,
+		modelRegistryEntriesTable,
+		modelRegistryEntriesTable,
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+		p.arg(pattern),
+	))
 }
 
 func (p *postgresDefinitionListPredicate) add(clause string) {
