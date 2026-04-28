@@ -1,0 +1,39 @@
+apiVersion: platform.code-code.internal/v1
+kind: Provider
+metadata:
+  name: provider-openai-compatible
+spec:
+  provider:
+    providerId: provider-openai-compatible
+    displayName: MiniMax
+    surfaces:
+      - surfaceId: provider-openai-compatible
+        sourceRef:
+          kind: PROVIDER_SURFACE_SOURCE_KIND_VENDOR
+          id: minimax
+          surfaceId: provider-openai-compatible
+        runtime:
+          displayName: MiniMax OpenAI Compatible
+          api:
+            protocol: PROTOCOL_OPENAI_COMPATIBLE
+            baseUrl: https://api.minimaxi.com/v1
+          origin: PROVIDER_SURFACE_ORIGIN_DERIVED
+          catalog:
+            source: CATALOG_SOURCE_FALLBACK_CONFIG
+            models:
+              - providerModelId: MiniMax-M2.7
+                modelRef:
+                  modelId: MiniMax-M2.7
+                  vendorId: minimax
+              - providerModelId: MiniMax-M2.7-highspeed
+                modelRef:
+                  modelId: MiniMax-M2.7-highspeed
+                  vendorId: minimax
+              - providerModelId: MiniMax-M2.5
+                modelRef:
+                  modelId: MiniMax-M2.5
+                  vendorId: minimax
+              - providerModelId: MiniMax-M2.5-highspeed
+                modelRef:
+                  modelId: MiniMax-M2.5-highspeed
+                  vendorId: minimax

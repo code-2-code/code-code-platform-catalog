@@ -12,19 +12,21 @@ import (
 	"time"
 
 	cliruntimev1 "code-code.internal/go-contract/platform/cli_runtime/v1"
+	egressservicev1 "code-code.internal/go-contract/platform/egress/v1"
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
-	"code-code.internal/platform-k8s/cliruntime"
-	"code-code.internal/platform-k8s/cliversions"
-	"code-code.internal/platform-k8s/domainevents"
-	"code-code.internal/platform-k8s/state"
-	"code-code.internal/platform-k8s/supportservice"
-	"code-code.internal/platform-k8s/telemetry"
-	"code-code.internal/platform-k8s/temporalruntime"
+	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliruntime"
+	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliversions"
+	"code-code.internal/platform-k8s/internal/platform/domainevents"
+	"code-code.internal/platform-k8s/internal/platform/state"
+	"code-code.internal/platform-k8s/internal/platform/telemetry"
+	"code-code.internal/platform-k8s/internal/platform/temporalruntime"
+	"code-code.internal/platform-k8s/internal/supportservice"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	temporalclient "go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -39,6 +41,7 @@ func main() {
 	runNamespace := envOrDefault("PLATFORM_SUPPORT_SERVICE_RUN_NAMESPACE", "code-code-runs")
 	grpcAddr := envOrDefault("PLATFORM_SUPPORT_SERVICE_GRPC_ADDR", ":8081")
 	httpAddr := envOrDefault("PLATFORM_SUPPORT_SERVICE_HTTP_ADDR", ":8080")
+	egressAddr := envOrDefault("PLATFORM_SUPPORT_SERVICE_EGRESS_GRPC_ADDR", "platform-egress-service.code-code-net.svc.cluster.local:8081")
 	imageRegistry := envOrDefault("PLATFORM_SUPPORT_SERVICE_IMAGE_REGISTRY", "")
 	imageRegistryLookup := envOrDefault("PLATFORM_SUPPORT_SERVICE_IMAGE_REGISTRY_LOOKUP_PREFIX", "")
 	registryInsecure, err := boolEnv("PLATFORM_SUPPORT_SERVICE_IMAGE_REGISTRY_LOOKUP_INSECURE")
@@ -104,6 +107,10 @@ func main() {
 		Namespace: namespace,
 	})
 	must(err)
+	egressConn, err := grpc.NewClient(egressAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	must(err)
+	defer func() { _ = egressConn.Close() }()
+	egressClient := egressservicev1.NewEgressServiceClient(egressConn)
 	imageBuildRunner, err := cliruntime.NewImageBuildJobRunner(client, runNamespace)
 	must(err)
 	temporalConfig := temporalruntime.ConfigFromEnv(cliruntime.TemporalTaskQueue)
@@ -136,6 +143,16 @@ func main() {
 	if domainEventsNATSURL != "" {
 		startDomainEventRuntime(ctx, statePool, outbox, temporalRuntime.Client, temporalConfig.TaskQueue, domainEventsNATSURL)
 	}
+	go func() {
+		if err := supportservice.SyncStartupExternalAccessSets(ctx, egressClient); err != nil && ctx.Err() == nil {
+			log.Printf("startup external access sync failed: %v", err)
+		}
+	}()
+	go func() {
+		if err := supportservice.SyncStartupRuntimeTelemetryProfiles(ctx, supportServer, egressClient); err != nil && ctx.Err() == nil {
+			log.Printf("startup runtime telemetry sync failed: %v", err)
+		}
+	}()
 	serveErr := make(chan error, 2)
 	go func() {
 		if err := grpcServer.Serve(grpcListener); err != nil {

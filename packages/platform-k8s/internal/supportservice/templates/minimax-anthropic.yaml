@@ -1,0 +1,55 @@
+# Quick template for one MiniMax-backed Anthropic-compatible provider surface.
+#
+# Use this template when you want to avoid hand-filling the provider base URL
+# and the initial fixed model set.
+#
+# MiniMax currently relies on configured fallback models in this repo because
+# the provider does not expose a public models discovery endpoint compatible
+# with the current Anthropic runtime flow.
+#
+# This template ships the current static MiniMax text catalog through the
+# Provider runtime catalog. Model registry metadata is owned by model-service.
+#
+# References:
+# - MiniMax API overview: https://platform.minimax.io/docs/api-reference/api-overview
+# - MiniMax Anthropic-compatible guide: https://platform.minimax.io/docs/api-reference/text-anthropic-api
+apiVersion: platform.code-code.internal/v1
+kind: Provider
+metadata:
+  name: minimax-anthropic
+  namespace: code-code
+spec:
+  provider:
+    providerId: minimax-anthropic
+    displayName: MiniMax
+    surfaces:
+      - surfaceId: minimax-anthropic
+        sourceRef:
+          kind: PROVIDER_SURFACE_SOURCE_KIND_VENDOR
+          id: minimax
+          surfaceId: minimax-anthropic
+        runtime:
+          displayName: MiniMax Anthropic
+          api:
+            protocol: PROTOCOL_ANTHROPIC
+            baseUrl: https://api.minimaxi.com/anthropic
+          origin: PROVIDER_SURFACE_ORIGIN_DERIVED
+          catalog:
+            source: CATALOG_SOURCE_FALLBACK_CONFIG
+            models:
+              - providerModelId: MiniMax-M2.7
+                modelRef:
+                  modelId: MiniMax-M2.7
+                  vendorId: minimax
+              - providerModelId: MiniMax-M2.7-highspeed
+                modelRef:
+                  modelId: MiniMax-M2.7-highspeed
+                  vendorId: minimax
+              - providerModelId: MiniMax-M2.5
+                modelRef:
+                  modelId: MiniMax-M2.5
+                  vendorId: minimax
+              - providerModelId: MiniMax-M2.5-highspeed
+                modelRef:
+                  modelId: MiniMax-M2.5-highspeed
+                  vendorId: minimax

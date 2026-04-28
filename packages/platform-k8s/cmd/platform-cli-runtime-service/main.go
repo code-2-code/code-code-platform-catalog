@@ -7,17 +7,19 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	cliruntimev1 "code-code.internal/go-contract/platform/cli_runtime/v1"
-	"code-code.internal/platform-k8s/cliruntime"
-	"code-code.internal/platform-k8s/cliversions"
-	"code-code.internal/platform-k8s/domainevents"
-	"code-code.internal/platform-k8s/internal/triggerhttp"
-	"code-code.internal/platform-k8s/state"
-	"code-code.internal/platform-k8s/telemetry"
+	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliruntime"
+	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliversions"
+	"code-code.internal/platform-k8s/internal/platform/domainevents"
+	"code-code.internal/platform-k8s/internal/platform/state"
+	"code-code.internal/platform-k8s/internal/platform/telemetry"
+	"code-code.internal/platform-k8s/internal/platform/triggerhttp"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -40,6 +42,7 @@ func main() {
 	sourceContext := envOrDefault("PLATFORM_CLI_RUNTIME_SERVICE_IMAGE_BUILD_SOURCE_CONTEXT", "")
 	sourceRevision := envOrDefault("PLATFORM_CLI_RUNTIME_SERVICE_IMAGE_BUILD_SOURCE_REVISION", "")
 	domainEventsNATSURL := envOrDefault("PLATFORM_CLI_RUNTIME_SERVICE_DOMAIN_EVENTS_NATS_URL", "")
+	internalActionToken := strings.TrimSpace(os.Getenv("PLATFORM_CLI_RUNTIME_SERVICE_INTERNAL_ACTION_TOKEN"))
 	databaseURL := firstEnv("PLATFORM_DATABASE_URL", "PLATFORM_CLI_RUNTIME_SERVICE_DATABASE_URL")
 
 	telemetryShutdown, err := telemetry.Setup(context.Background(), envOrDefault("OTEL_SERVICE_NAME", "platform-cli-runtime-service"))
@@ -91,8 +94,12 @@ func main() {
 				return service.SyncCLIVersions(ctx)
 			},
 		},
+		AuthToken: internalActionToken,
 	})
 	must(err)
+	if internalActionToken == "" {
+		log.Printf("internal action endpoints are disabled (env PLATFORM_CLI_RUNTIME_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
+	}
 
 	grpcListener, err := net.Listen("tcp", grpcAddr)
 	must(err)

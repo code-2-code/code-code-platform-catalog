@@ -1,0 +1,60 @@
+# Quick template for one Mistral-backed OpenAI-compatible provider surface.
+#
+# Use this template when you want to avoid hand-filling the provider base URL
+# and the initial provider catalog wiring. Model registry metadata is owned by
+# model-service.
+#
+# This template is consumed by platform-provider-service and is not a kubectl
+# apply manifest. Credential material is created through auth-service and is not
+# represented as a Kubernetes Secret here.
+#
+# References:
+# - Mistral Chat Completions API: https://docs.mistral.ai/api
+# - Mistral Models API: https://docs.mistral.ai/api/endpoint/models
+# - Mistral client examples use model ids such as `mistral-small-latest`:
+#   https://docs.mistral.ai/getting-started/clients
+apiVersion: platform.code-code.internal/v1
+kind: CredentialDefinition
+metadata:
+  name: mistral-api-key
+  namespace: code-code
+spec:
+  definition:
+    credentialId: mistral-api-key
+    displayName: Mistral API Key
+    kind: 1
+---
+apiVersion: platform.code-code.internal/v1
+kind: Provider
+metadata:
+  name: mistral-openai-compatible
+  namespace: code-code
+spec:
+  provider:
+    providerId: mistral-openai-compatible
+    displayName: Mistral AI
+    surfaces:
+      - surfaceId: mistral-openai-compatible
+        providerCredentialRef:
+          providerCredentialId: mistral-api-key
+        sourceRef:
+          kind: PROVIDER_SURFACE_SOURCE_KIND_VENDOR
+          id: mistral
+          surfaceId: mistral-openai-compatible
+        runtime:
+          displayName: Mistral OpenAI Compatible
+          api:
+            protocol: PROTOCOL_OPENAI_COMPATIBLE
+            baseUrl: https://api.mistral.ai/v1
+          origin: PROVIDER_SURFACE_ORIGIN_DERIVED
+          catalog:
+            source: CATALOG_SOURCE_FALLBACK_CONFIG
+            models:
+              - providerModelId: mistral-small-latest
+                modelRef:
+                  modelId: mistral-small-latest
+                  vendorId: mistral
+              - providerModelId: mistral-medium-latest
+                modelRef:
+                  modelId: mistral-medium-latest
+                  vendorId: mistral

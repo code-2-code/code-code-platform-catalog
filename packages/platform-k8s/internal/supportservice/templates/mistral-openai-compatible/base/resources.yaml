@@ -1,0 +1,43 @@
+apiVersion: platform.code-code.internal/v1
+kind: CredentialDefinition
+metadata:
+  name: provider-api-key
+spec:
+  definition:
+    credentialId: provider-api-key
+    displayName: Provider API Key
+    kind: 1
+---
+apiVersion: platform.code-code.internal/v1
+kind: Provider
+metadata:
+  name: provider-openai-compatible
+spec:
+  provider:
+    providerId: provider-openai-compatible
+    displayName: Mistral AI
+    surfaces:
+      - surfaceId: provider-openai-compatible
+        providerCredentialRef:
+          providerCredentialId: provider-api-key
+        sourceRef:
+          kind: PROVIDER_SURFACE_SOURCE_KIND_VENDOR
+          id: mistral
+          surfaceId: provider-openai-compatible
+        runtime:
+          displayName: Mistral OpenAI Compatible
+          api:
+            protocol: PROTOCOL_OPENAI_COMPATIBLE
+            baseUrl: https://api.example.com/v1
+          origin: PROVIDER_SURFACE_ORIGIN_DERIVED
+          catalog:
+            source: CATALOG_SOURCE_FALLBACK_CONFIG
+            models:
+              - providerModelId: primary-model
+                modelRef:
+                  modelId: primary-model
+                  vendorId: mistral
+              - providerModelId: secondary-model
+                modelRef:
+                  modelId: secondary-model
+                  vendorId: mistral

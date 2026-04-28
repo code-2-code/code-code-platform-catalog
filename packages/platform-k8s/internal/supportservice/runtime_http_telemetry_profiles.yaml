@@ -1,0 +1,169 @@
+profiles:
+  - profileId: protocol.openai-compatible.runtime-http-telemetry
+    displayName: OpenAI Compatible Runtime HTTP Telemetry
+    metrics:
+      - name: gen_ai.provider.runtime.rate_limit.limit
+        description: Runtime rate limit ceiling from selected upstream response headers.
+        unit: "{count}"
+        kind: OBSERVABILITY_METRIC_KIND_GAUGE
+        category: OBSERVABILITY_METRIC_CATEGORY_RATE_LIMIT
+        attributes:
+          - name: resource
+            description: Rate limited resource type.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_REQUIRED
+          - name: host
+            description: Matched upstream host.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: provider_id
+            description: Stable provider identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: model_id
+            description: Requested model identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+      - name: gen_ai.provider.runtime.rate_limit.remaining
+        description: Runtime rate limit remaining value from selected upstream response headers.
+        unit: "{count}"
+        kind: OBSERVABILITY_METRIC_KIND_GAUGE
+        category: OBSERVABILITY_METRIC_CATEGORY_RATE_LIMIT
+        attributes:
+          - name: resource
+            description: Rate limited resource type.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_REQUIRED
+          - name: host
+            description: Matched upstream host.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: provider_id
+            description: Stable provider identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: model_id
+            description: Requested model identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+      - name: gen_ai.provider.runtime.retry_after.seconds
+        description: Retry-after duration from selected upstream response headers.
+        unit: s
+        kind: OBSERVABILITY_METRIC_KIND_GAUGE
+        category: OBSERVABILITY_METRIC_CATEGORY_RATE_LIMIT
+        attributes:
+          - name: host
+            description: Matched upstream host.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: provider_id
+            description: Stable provider identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: model_id
+            description: Requested model identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+    passiveHttp:
+      capturePoint: TELEMETRY_CAPTURE_POINT_EGRESS
+      emitAccessLog: true
+      transforms:
+        - source: HTTP_HEADER_SOURCE_RESPONSE
+          headerName: x-ratelimit-limit-requests
+          metricName: gen_ai.provider.runtime.rate_limit.limit
+          valueType: HEADER_VALUE_TYPE_INT64
+          labels:
+            - name: resource
+              value: requests
+        - source: HTTP_HEADER_SOURCE_RESPONSE
+          headerName: x-ratelimit-remaining-requests
+          metricName: gen_ai.provider.runtime.rate_limit.remaining
+          valueType: HEADER_VALUE_TYPE_INT64
+          labels:
+            - name: resource
+              value: requests
+        - source: HTTP_HEADER_SOURCE_RESPONSE
+          headerName: retry-after
+          metricName: gen_ai.provider.runtime.retry_after.seconds
+          valueType: HEADER_VALUE_TYPE_DURATION_SECONDS
+      redaction:
+        dropRawHeaders: true
+        redactHeaders:
+          - authorization
+          - cookie
+          - proxy-authorization
+          - set-cookie
+          - x-api-key
+  - profileId: protocol.openai-responses.runtime-http-telemetry
+    displayName: OpenAI Responses Runtime HTTP Telemetry
+    metrics:
+      - name: gen_ai.provider.runtime.rate_limit.limit
+        description: Runtime rate limit ceiling from selected upstream response headers.
+        unit: "{count}"
+        kind: OBSERVABILITY_METRIC_KIND_GAUGE
+        category: OBSERVABILITY_METRIC_CATEGORY_RATE_LIMIT
+        attributes:
+          - name: resource
+            description: Rate limited resource type.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_REQUIRED
+          - name: host
+            description: Matched upstream host.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: provider_id
+            description: Stable provider identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: model_id
+            description: Requested model identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+      - name: gen_ai.provider.runtime.rate_limit.remaining
+        description: Runtime rate limit remaining value from selected upstream response headers.
+        unit: "{count}"
+        kind: OBSERVABILITY_METRIC_KIND_GAUGE
+        category: OBSERVABILITY_METRIC_CATEGORY_RATE_LIMIT
+        attributes:
+          - name: resource
+            description: Rate limited resource type.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_REQUIRED
+          - name: host
+            description: Matched upstream host.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: provider_id
+            description: Stable provider identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: model_id
+            description: Requested model identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+      - name: gen_ai.provider.runtime.retry_after.seconds
+        description: Retry-after duration from selected upstream response headers.
+        unit: s
+        kind: OBSERVABILITY_METRIC_KIND_GAUGE
+        category: OBSERVABILITY_METRIC_CATEGORY_RATE_LIMIT
+        attributes:
+          - name: host
+            description: Matched upstream host.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: provider_id
+            description: Stable provider identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+          - name: model_id
+            description: Requested model identifier when present in the telemetry stream.
+            requirementLevel: OBSERVABILITY_ATTRIBUTE_REQUIREMENT_LEVEL_RECOMMENDED
+    passiveHttp:
+      capturePoint: TELEMETRY_CAPTURE_POINT_EGRESS
+      emitAccessLog: true
+      transforms:
+        - source: HTTP_HEADER_SOURCE_RESPONSE
+          headerName: x-ratelimit-limit-requests
+          metricName: gen_ai.provider.runtime.rate_limit.limit
+          valueType: HEADER_VALUE_TYPE_INT64
+          labels:
+            - name: resource
+              value: requests
+        - source: HTTP_HEADER_SOURCE_RESPONSE
+          headerName: x-ratelimit-remaining-requests
+          metricName: gen_ai.provider.runtime.rate_limit.remaining
+          valueType: HEADER_VALUE_TYPE_INT64
+          labels:
+            - name: resource
+              value: requests
+        - source: HTTP_HEADER_SOURCE_RESPONSE
+          headerName: retry-after
+          metricName: gen_ai.provider.runtime.retry_after.seconds
+          valueType: HEADER_VALUE_TYPE_DURATION_SECONDS
+      redaction:
+        dropRawHeaders: true
+        redactHeaders:
+          - authorization
+          - cookie
+          - proxy-authorization
+          - set-cookie
+          - x-api-key

@@ -1,0 +1,12 @@
+proxyPresets:
+  - presetId: support.proxy-preset.preset-proxy
+    displayName: Preset Proxy
+    ownerService: platform-support-service
+    policyId: code-code-egress
+    proxyProtocol: http-connect
+    destinationId: preset-proxy
+    hostExact: preset-proxy.local
+    addressCidr: 192.168.0.126/32
+    port: 10809
+    sourceServiceAccounts:
+      - code-code/platform-support-service

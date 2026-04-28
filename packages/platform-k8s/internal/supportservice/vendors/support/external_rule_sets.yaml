@@ -1,0 +1,89 @@
+ruleSets:
+  - ruleSetId: support.external-rule-set.bootstrap
+    displayName: Preset External Rule Set
+    ownerService: platform-support-service
+    policyId: code-code-egress
+    sourceServiceAccounts:
+      - code-code/platform-support-service
+    rules:
+      - ruleId: github-raw-content
+        displayName: GitHub Raw Content
+        hostExact: raw.githubusercontent.com
+        port: 443
+        protocol: tls
+        resolution: dns
+      - ruleId: openai-api
+        destinationId: protocol.openai-compatible.api
+        displayName: OpenAI Compatible API
+        hostExact: api.openai.com
+        port: 443
+        protocol: tls
+        resolution: dns
+        sourceServiceAccounts:
+          - code-code/platform-agent-runtime-service
+  - ruleSetId: support.external-rule-set.l7-smoke
+    displayName: L7 Smoke External Rule Set
+    ownerService: platform-support-service
+    policyId: code-code-egress
+    startupSync: false
+    sourceServiceAccounts:
+      - code-code/l7-smoke-client
+    rules:
+      - ruleId: httpbin-headers
+        displayName: HTTPBin Headers
+        hostExact: httpbin.org
+        port: 443
+        protocol: https
+        resolution: dns
+    httpRoutes:
+      - routeId: httpbin-headers
+        displayName: HTTPBin Headers L7 Smoke
+        destinationId: support.external-rule-set.l7-smoke.httpbin-headers
+        matches:
+          - pathPrefixes:
+              - /headers
+              - /response-headers
+            methods:
+              - GET
+        requestHeaders:
+          set:
+            - name: X-Code-Code-L7-Smoke
+              value: enabled
+          remove:
+            - X-Code-Code-Debug-Remove
+        responseHeaders:
+          set:
+            - name: X-Code-Code-L7-Response
+              value: enabled
+          remove:
+            - X-Code-Code-Response-Debug
+  - ruleSetId: support.external-rule-set.l7-dynamic-authz-smoke
+    displayName: L7 Dynamic Authz Smoke External Rule Set
+    ownerService: platform-support-service
+    policyId: code-code-egress
+    startupSync: false
+    sourceServiceAccounts:
+      - code-code/l7-smoke-client
+    rules:
+      - ruleId: httpbin-dynamic-authz
+        displayName: HTTPBin Dynamic Authz
+        hostExact: httpbin.org
+        port: 443
+        protocol: https
+        resolution: dns
+    httpRoutes:
+      - routeId: httpbin-dynamic-authz
+        displayName: HTTPBin Dynamic Authz L7 Smoke
+        destinationId: support.external-rule-set.l7-dynamic-authz-smoke.httpbin-dynamic-authz
+        dynamicHeaderAuthz: true
+        matches:
+          - pathPrefixes:
+              - /headers
+            methods:
+              - GET
+        requestHeaders:
+          set:
+            - name: X-Code-Code-L7-Smoke
+              value: enabled
+          remove:
+            - X-Code-Code-Debug-Remove

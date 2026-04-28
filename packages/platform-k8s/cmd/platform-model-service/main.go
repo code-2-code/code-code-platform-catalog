@@ -9,20 +9,21 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	modelservicev1 "code-code.internal/go-contract/platform/model/v1"
 	"code-code.internal/go-contract/platform/model/v1/modelservicev1connect"
 	platformk8s "code-code.internal/platform-k8s"
-	"code-code.internal/platform-k8s/domainevents"
-	"code-code.internal/platform-k8s/internal/triggerhttp"
-	"code-code.internal/platform-k8s/modelservice"
-	"code-code.internal/platform-k8s/state"
-	"code-code.internal/platform-k8s/telemetry"
-	"code-code.internal/platform-k8s/temporalruntime"
+	"code-code.internal/platform-k8s/internal/modelservice"
+	"code-code.internal/platform-k8s/internal/platform/domainevents"
+	"code-code.internal/platform-k8s/internal/platform/state"
+	"code-code.internal/platform-k8s/internal/platform/telemetry"
+	"code-code.internal/platform-k8s/internal/platform/triggerhttp"
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
-	temporalworker "go.temporal.io/sdk/worker"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
@@ -38,6 +39,7 @@ func main() {
 	grpcAddr := envOrDefault("PLATFORM_MODEL_SERVICE_GRPC_ADDR", ":8081")
 	httpAddr := envOrDefault("PLATFORM_MODEL_SERVICE_HTTP_ADDR", ":8080")
 	domainEventsNATSURL := envOrDefault("PLATFORM_MODEL_SERVICE_DOMAIN_EVENTS_NATS_URL", "")
+	internalActionToken := strings.TrimSpace(os.Getenv("PLATFORM_MODEL_SERVICE_INTERNAL_ACTION_TOKEN"))
 	databaseURL := firstEnv("PLATFORM_DATABASE_URL", "PLATFORM_MODEL_SERVICE_DATABASE_URL")
 
 	telemetryShutdown, err := telemetry.Setup(context.Background(), envOrDefault("OTEL_SERVICE_NAME", "platform-model-service"))
@@ -73,12 +75,7 @@ func main() {
 		Namespace: namespace,
 	})
 	must(err)
-	temporalConfig := temporalruntime.ConfigFromEnv(modelservice.TemporalTaskQueue)
-	temporalRuntime, err := temporalruntime.Start(context.Background(), temporalConfig, func(worker temporalworker.Worker) error {
-		return modelservice.RegisterTemporalWorkflows(worker, server)
-	}, modelservice.EnsureTemporalSchedules)
-	must(err)
-	defer temporalRuntime.Stop()
+
 	triggerServer, err := triggerhttp.NewServer(triggerhttp.Config{
 		Logger: slog.Default(),
 		Actions: map[string]triggerhttp.ActionFunc{
@@ -90,16 +87,30 @@ func main() {
 				return map[string]string{"status": response.GetStatus()}, nil
 			},
 		},
+		AuthToken: internalActionToken,
 	})
 	must(err)
+	if internalActionToken == "" {
+		log.Printf("internal action endpoints are disabled (env PLATFORM_MODEL_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
+	}
 
 	listener, err := net.Listen("tcp", grpcAddr)
 	must(err)
 	httpListener, err := net.Listen("tcp", httpAddr)
 	must(err)
+	var natsHealthConn *nats.Conn
+	var natsHealthJS jetstream.JetStream
+	if domainEventsNATSURL != "" {
+		natsHealthConn, err = nats.Connect(domainEventsNATSURL, nats.Name("platform-model-service-readiness"))
+		must(err)
+		defer natsHealthConn.Close()
+		natsHealthJS, err = jetstream.New(natsHealthConn)
+		must(err)
+	}
 	httpMux := http.NewServeMux()
 	_, modelConnectHandler := modelservicev1connect.NewModelServiceHandler(server)
-	httpMux.Handle(modelservicev1connect.ModelServiceListModelDefinitionsProcedure, modelConnectHandler)
+	httpMux.Handle(modelservicev1connect.ModelServiceListModelsProcedure, modelConnectHandler)
+	httpMux.HandleFunc("/readyz", readyzHandler(slog.Default(), statePool, natsHealthJS))
 	httpMux.Handle("/", triggerServer)
 	httpServer := &http.Server{Handler: httpMux}
 	grpcServer := grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler()))
@@ -130,7 +141,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("platform-model-service starting (namespace=%s grpc=%s http=%s temporal=%s/%s)", namespace, grpcAddr, httpAddr, temporalConfig.Address, temporalConfig.TaskQueue)
+	log.Printf("platform-model-service starting (namespace=%s grpc=%s http=%s)", namespace, grpcAddr, httpAddr)
 	select {
 	case err := <-serveErr:
 		must(err)
