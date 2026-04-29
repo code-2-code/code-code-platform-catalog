@@ -5,13 +5,57 @@ ruleSets:
     policyId: code-code-egress
     sourceServiceAccounts:
       - code-code/platform-support-service
+      - code-code-runs/cli-runtime-image-build
     rules:
+      - ruleId: brew-api
+        displayName: Homebrew API
+        hostExact: formulae.brew.sh
+        port: 443
+        protocol: tls
+        resolution: dns
+        proxyEndpointId: preset-proxy
+      - ruleId: npm-registry
+        displayName: NPM Registry
+        hostExact: registry.npmjs.org
+        port: 443
+        protocol: tls
+        resolution: dns
+        proxyEndpointId: preset-proxy
       - ruleId: github-raw-content
         displayName: GitHub Raw Content
         hostExact: raw.githubusercontent.com
         port: 443
         protocol: tls
         resolution: dns
+        proxyEndpointId: preset-proxy
+      - ruleId: docker-registry
+        displayName: Docker Hub Registry
+        hostExact: registry-1.docker.io
+        port: 443
+        protocol: tls
+        resolution: dns
+        proxyEndpointId: preset-proxy
+      - ruleId: docker-auth
+        displayName: Docker Hub Auth
+        hostExact: auth.docker.io
+        port: 443
+        protocol: tls
+        resolution: dns
+        proxyEndpointId: preset-proxy
+      - ruleId: docker-cdn
+        displayName: Docker Hub CDN
+        hostExact: production.cloudflare.docker.com
+        port: 443
+        protocol: tls
+        resolution: dns
+        proxyEndpointId: preset-proxy
+      - ruleId: docker-index
+        displayName: Docker Hub Index
+        hostExact: index.docker.io
+        port: 443
+        protocol: tls
+        resolution: dns
+        proxyEndpointId: preset-proxy
       - ruleId: openai-api
         destinationId: protocol.openai-compatible.api
         displayName: OpenAI Compatible API
@@ -21,6 +65,7 @@ ruleSets:
         resolution: dns
         sourceServiceAccounts:
           - code-code/platform-agent-runtime-service
+        proxyEndpointId: preset-proxy
       - ruleId: mistral-api
         destinationId: vendor.mistral.api
         displayName: Mistral API
@@ -32,6 +77,7 @@ ruleSets:
           - code-code/platform-agent-runtime-service
           - code-code/platform-provider-service
           - code-code/provider-host-blackbox-exporter
+        proxyEndpointId: preset-proxy
       - ruleId: mistral-console
         destinationId: vendor.mistral.console
         displayName: Mistral Console
@@ -41,6 +87,38 @@ ruleSets:
         resolution: dns
         sourceServiceAccounts:
           - code-code/platform-provider-service
+        proxyEndpointId: preset-proxy
+      - ruleId: google-aistudio-rpc
+        destinationId: vendor.google.aistudio.rpc
+        displayName: Google AI Studio RPC
+        hostExact: alkalimakersuite-pa.clients6.google.com
+        port: 443
+        protocol: https
+        resolution: dns
+        sourceServiceAccounts:
+          - code-code/platform-provider-service
+      - ruleId: google-generative-language-api
+        destinationId: vendor.google.generative-language-api
+        displayName: Google Generative Language API
+        hostExact: generativelanguage.googleapis.com
+        port: 443
+        protocol: tls
+        resolution: dns
+        sourceServiceAccounts:
+          - code-code/platform-provider-service
+          - code-code/provider-host-blackbox-exporter
+        proxyEndpointId: preset-proxy
+    httpRoutes:
+      - routeId: google-aistudio-rpc
+        displayName: Google AI Studio RPC Dynamic Header Authz
+        destinationId: vendor.google.aistudio.rpc
+        proxyEndpointId: preset-proxy
+        dynamicHeaderAuthz: true
+        matches:
+          - pathPrefixes:
+              - /$rpc/google.internal.alkali.applications.makersuite.v1.MakerSuiteService/
+            methods:
+              - POST
   - ruleSetId: support.external-rule-set.l7-smoke
     displayName: L7 Smoke External Rule Set
     ownerService: platform-support-service
