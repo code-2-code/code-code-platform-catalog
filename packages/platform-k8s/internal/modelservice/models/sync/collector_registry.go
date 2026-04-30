@@ -52,7 +52,7 @@ func buildDefinitionSourceCollectors() map[string]definitionSourceCollectorSpec 
 			presetVendor:      true,
 			endpoint:          "https://models.inference.ai.azure.com/models",
 			timeout:           6 * time.Second,
-		collect: func(ctx context.Context, r *DefinitionSyncReconciler, httpClient *http.Client, snapshot *collectedDefinitionsSnapshot) {
+			collect: func(ctx context.Context, r *DefinitionSyncReconciler, httpClient *http.Client, snapshot *collectedDefinitionsSnapshot) {
 				items, err := source.FetchJSONArray[github.Model](ctx, httpClient, r.definitionSourceEndpoint(models.SourceIDGitHubModels))
 				if err != nil {
 					r.logger.Warn("skip github models collection", "error", err)

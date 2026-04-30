@@ -219,4 +219,3 @@ func parseOutputModalities(values []components.OutputModality) []modelv1.Modalit
 	}
 	return source.ParseModalities(raw)
 }
-

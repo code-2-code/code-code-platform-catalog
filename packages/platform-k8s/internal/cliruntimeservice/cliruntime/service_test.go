@@ -39,8 +39,6 @@ func TestServiceSyncCLIVersionsDispatchesBuildRequests(t *testing.T) {
 		}},
 		Dispatcher:     dispatcher,
 		ImageRegistry:  "registry.internal/platform",
-		SourceContext:  "https://git.example.com/code-code.git",
-		SourceRevision: "main",
 	})
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)

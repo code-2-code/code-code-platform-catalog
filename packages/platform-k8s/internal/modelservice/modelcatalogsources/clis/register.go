@@ -8,8 +8,8 @@ import (
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
 	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliversions"
 	"code-code.internal/platform-k8s/internal/modelservice/modelcatalogsources"
-	clioauth "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/oauth"
-	clisupport "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/support"
+	clioauth "code-code.internal/platform-k8s/internal/platform/clidefinitions/oauth"
+	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
 	"google.golang.org/protobuf/proto"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )

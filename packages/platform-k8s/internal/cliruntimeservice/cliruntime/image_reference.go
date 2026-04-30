@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliversions"
-	cliidentity "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/identity"
+	cliidentity "code-code.internal/platform-k8s/internal/platform/clidefinitions/identity"
 )
 
 type imageReferencePlanner struct {

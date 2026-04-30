@@ -7,7 +7,7 @@ import (
 	providerv1 "code-code.internal/go-contract/provider/v1"
 	"code-code.internal/platform-k8s/internal/modelservice/modelcatalogsources"
 	"code-code.internal/platform-k8s/internal/providerservice/providers"
-	surfaceregistry "code-code.internal/platform-k8s/internal/supportservice/providersurfaces/registry"
+	surfaceregistry "code-code.internal/platform-k8s/internal/platform/providersurfaces/registry"
 )
 
 type RegisterConfig struct {

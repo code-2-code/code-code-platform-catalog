@@ -22,6 +22,7 @@ var ErrBuildInProgress = errors.New("cli runtime image build already in progress
 type ImageBuildJobRunner struct {
 	client    ctrlclient.Client
 	namespace string
+	metrics   *imageBuildMetrics
 }
 
 func NewImageBuildJobRunner(client ctrlclient.Client, namespace string) (*ImageBuildJobRunner, error) {
@@ -31,10 +32,21 @@ func NewImageBuildJobRunner(client ctrlclient.Client, namespace string) (*ImageB
 	if namespace == "" {
 		return nil, fmt.Errorf("platformk8s/cliruntime: image build namespace is empty")
 	}
-	return &ImageBuildJobRunner{client: client, namespace: namespace}, nil
+	metrics, err := registerImageBuildMetrics()
+	if err != nil {
+		return nil, fmt.Errorf("platformk8s/cliruntime: register image build metrics: %w", err)
+	}
+	return &ImageBuildJobRunner{client: client, namespace: namespace, metrics: metrics}, nil
 }
 
 func (r *ImageBuildJobRunner) RunImageBuild(ctx context.Context, request ImageBuildRequest) error {
+	start := time.Now()
+	err := r.runImageBuildInternal(ctx, request)
+	r.metrics.recordImageBuildRun(request.BuildTarget, time.Since(start), err)
+	return err
+}
+
+func (r *ImageBuildJobRunner) runImageBuildInternal(ctx context.Context, request ImageBuildRequest) error {
 	name := imageBuildJobName(request)
 	if active, err := r.activeBuildExists(ctx, name); err != nil || active {
 		if err != nil {
@@ -42,9 +54,12 @@ func (r *ImageBuildJobRunner) RunImageBuild(ctx context.Context, request ImageBu
 		}
 		return ErrBuildInProgress
 	}
-	job := r.jobFor(request, name)
+	job, err := r.jobFor(request, name)
+	if err != nil {
+		return err
+	}
 	existing := &batchv1.Job{}
-	err := r.client.Get(ctx, types.NamespacedName{Namespace: r.namespace, Name: name}, existing)
+	err = r.client.Get(ctx, types.NamespacedName{Namespace: r.namespace, Name: name}, existing)
 	if apierrors.IsNotFound(err) {
 		err = r.client.Create(ctx, job)
 	}
@@ -94,7 +109,11 @@ func (r *ImageBuildJobRunner) wait(ctx context.Context, name string) error {
 	}
 }
 
-func (r *ImageBuildJobRunner) jobFor(request ImageBuildRequest, name string) *batchv1.Job {
+func (r *ImageBuildJobRunner) jobFor(request ImageBuildRequest, name string) (*batchv1.Job, error) {
+	dockerfileContents, err := buildDockerfileContents(request.BuildTarget)
+	if err != nil {
+		return nil, err
+	}
 	labels := map[string]string{
 		"code-code.internal/runtime":                imageBuildWorkflowKind,
 		"platform.code-code.internal/workflow-kind": imageBuildWorkflowKind,
@@ -109,7 +128,12 @@ func (r *ImageBuildJobRunner) jobFor(request ImageBuildRequest, name string) *ba
 			ActiveDeadlineSeconds:   int64Ptr(3600),
 			TTLSecondsAfterFinished: int32Ptr(86400),
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+					Annotations: map[string]string{
+						"container.apparmor.security.beta.kubernetes.io/build-and-push": "unconfined",
+					},
+				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: "cli-runtime-image-build",
 					RestartPolicy:      corev1.RestartPolicyNever,
@@ -122,22 +146,24 @@ func (r *ImageBuildJobRunner) jobFor(request ImageBuildRequest, name string) *ba
 						{Name: "buildkitd", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 						{Name: "egress-trust-bundle", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: "code-code-egress-trust-bundle"}}}},
 					},
-					InitContainers: []corev1.Container{buildAndPushContainer(request)},
+					InitContainers: []corev1.Container{buildAndPushContainer(request, dockerfileContents)},
 					Containers:     []corev1.Container{pruneOldTagsContainer(request)},
 				},
 			},
 		},
-	}
+	}, nil
 }
 
-func buildAndPushContainer(request ImageBuildRequest) corev1.Container {
+func buildAndPushContainer(request ImageBuildRequest, dockerfileContents string) corev1.Container {
+	env := imageBuildEnv(request, dockerfileContents)
+	env = append(env, corev1.EnvVar{Name: "BUILDKITD_FLAGS", Value: "--oci-worker-no-process-sandbox --oci-worker-net=host"})
 	return corev1.Container{
 		Name:            "build-and-push",
 		Image:           "moby/buildkit:v0.29.0-rootless",
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/bin/sh", "-eu", "-c"},
 		Args:            []string{buildAndPushScript},
-		Env:             append(imageBuildEnv(request), corev1.EnvVar{Name: "BUILDKITD_FLAGS", Value: "--oci-worker-no-process-sandbox"}),
+		Env:             env,
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "registry-auth", MountPath: "/registry-auth", ReadOnly: true},
 			{Name: "buildkitd", MountPath: "/home/user/.local/share/buildkit"},
@@ -158,10 +184,12 @@ func pruneOldTagsContainer(request ImageBuildRequest) corev1.Container {
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command:         []string{"/bin/sh", "-eu", "-c"},
 		Args:            []string{pruneOldTagsScript},
-		Env: append(imageBuildEnv(request),
-			corev1.EnvVar{Name: "RETENTION_KEEP_TAGS", Value: "2"},
-			corev1.EnvVar{Name: "HOME", Value: "/tmp"},
-		),
+		Env: []corev1.EnvVar{
+			{Name: "IMAGE_REPOSITORY", Value: request.ImageRepository},
+			{Name: "DOCKER_CONFIG", Value: "/registry-auth"},
+			{Name: "RETENTION_KEEP_TAGS", Value: "2"},
+			{Name: "HOME", Value: "/tmp"},
+		},
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "registry-auth", MountPath: "/registry-auth", ReadOnly: true},
 			{Name: "egress-trust-bundle", MountPath: "/var/run/code-code-egress-trust", ReadOnly: true},
@@ -174,11 +202,13 @@ func pruneOldTagsContainer(request ImageBuildRequest) corev1.Container {
 	}
 }
 
-func imageBuildEnv(request ImageBuildRequest) []corev1.EnvVar {
+func imageBuildEnv(request ImageBuildRequest, dockerfileContents string) []corev1.EnvVar {
+	agentDir := buildTargetToAgentDir(request.BuildTarget)
+	cliPackage := buildTargetToCLIPackage(request.BuildTarget)
 	return []corev1.EnvVar{
-		{Name: "BUILD_TARGET", Value: request.BuildTarget},
-		{Name: "SOURCE_CONTEXT", Value: request.SourceContext},
-		{Name: "SOURCE_REVISION", Value: request.SourceRevision},
+		{Name: "DOCKERFILE_CONTENTS", Value: dockerfileContents},
+		{Name: "AGENT_DIR", Value: agentDir},
+		{Name: "CLI_PACKAGE", Value: cliPackage},
 		{Name: "IMAGE_REPOSITORY", Value: request.ImageRepository},
 		{Name: "IMAGE", Value: request.Image},
 		{Name: "CLI_VERSION", Value: request.CLIVersion},
@@ -186,7 +216,6 @@ func imageBuildEnv(request ImageBuildRequest) []corev1.EnvVar {
 		{Name: "DOCKER_CONFIG", Value: "/registry-auth"},
 		{Name: "SSL_CERT_FILE", Value: "/var/run/code-code-egress-trust/ca-certificates.crt"},
 		{Name: "CURL_CA_BUNDLE", Value: "/var/run/code-code-egress-trust/ca-certificates.crt"},
-		{Name: "GIT_SSL_CAINFO", Value: "/var/run/code-code-egress-trust/ca-certificates.crt"},
 		{Name: "NODE_EXTRA_CA_CERTS", Value: "/var/run/code-code-egress-trust/ca-certificates.crt"},
 	}
 }

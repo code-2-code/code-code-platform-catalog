@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
-	providerv1 "code-code.internal/go-contract/provider/v1"
 	"code-code.internal/platform-k8s/internal/platform/testutil"
 )
 
@@ -31,6 +30,13 @@ func TestServerListCLIsReturnsSupportData(t *testing.T) {
 	if got, want := claude.GetContainerImages()[0].GetImage(), "code-code/claude-code-agent:0.0.0"; got != want {
 		t.Fatalf("claude-code image = %q, want %q", got, want)
 	}
+	codex := findCLI(response.GetItems(), "codex")
+	if codex == nil {
+		t.Fatal("codex support data not found")
+	}
+	if codex.GetOauth().GetObservability() == nil {
+		t.Fatal("codex oauth observability = nil, want support observability profiles")
+	}
 }
 
 func TestServerListVendorsReturnsSupportData(t *testing.T) {
@@ -48,24 +54,16 @@ func TestServerListVendorsReturnsSupportData(t *testing.T) {
 	if len(response.GetItems()) == 0 {
 		t.Fatal("ListVendors() returned no support data")
 	}
+	google := findVendor(response.GetItems(), "google")
+	if google == nil {
+		t.Fatal("google vendor support data not found")
+	}
+	if len(google.GetProviderBindings()) == 0 || google.GetProviderBindings()[0].GetObservability() == nil {
+		t.Fatal("google vendor observability = nil, want support observability profiles")
+	}
 }
 
-func TestServerListProviderSurfacesReturnsSupportData(t *testing.T) {
-	server, err := NewServer(Config{
-		Reader:    testutil.NewEmptyClient(),
-		Namespace: "code-code",
-	})
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
-	response, err := server.ListProviderSurfaces(context.Background(), &supportv1.ListProviderSurfacesRequest{})
-	if err != nil {
-		t.Fatalf("ListProviderSurfaces() error = %v", err)
-	}
-	if findSurface(response.GetItems(), "openai-compatible") == nil {
-		t.Fatal("openai-compatible surface not found")
-	}
-}
+
 
 func findCLI(items []*supportv1.CLI, cliID string) *supportv1.CLI {
 	for _, item := range items {
@@ -76,9 +74,11 @@ func findCLI(items []*supportv1.CLI, cliID string) *supportv1.CLI {
 	return nil
 }
 
-func findSurface(items []*providerv1.ProviderSurface, surfaceID string) *providerv1.ProviderSurface {
+
+
+func findVendor(items []*supportv1.Vendor, vendorID string) *supportv1.Vendor {
 	for _, item := range items {
-		if item.GetSurfaceId() == surfaceID {
+		if item.GetVendor().GetVendorId() == vendorID {
 			return item
 		}
 	}

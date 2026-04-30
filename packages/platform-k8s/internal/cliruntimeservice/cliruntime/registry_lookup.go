@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	cliidentity "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/identity"
-	clisupport "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/support"
+	cliidentity "code-code.internal/platform-k8s/internal/platform/clidefinitions/identity"
+	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
 	"golang.org/x/mod/semver"
 )
 

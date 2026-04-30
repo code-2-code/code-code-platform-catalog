@@ -8,8 +8,8 @@ import (
 	apiprotocolv1 "code-code.internal/go-contract/api_protocol/v1"
 	credentialv1 "code-code.internal/go-contract/credential/v1"
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
-	clisupport "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/support"
-	vendorsupport "code-code.internal/platform-k8s/internal/supportservice/vendors/support"
+	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
+	vendorsupport "code-code.internal/platform-k8s/internal/platform/vendors/support"
 )
 
 func (s *Server) ResolveProviderCapabilities(ctx context.Context, request *supportv1.ResolveProviderCapabilitiesRequest) (*supportv1.ResolveProviderCapabilitiesResponse, error) {

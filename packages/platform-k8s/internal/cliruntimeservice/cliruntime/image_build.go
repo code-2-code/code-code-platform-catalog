@@ -10,8 +10,6 @@ import (
 
 type imageBuildPlanner struct {
 	imageReferencePlanner
-	SourceContext  string
-	SourceRevision string
 }
 
 type ImageBuildRequest struct {
@@ -24,41 +22,24 @@ type ImageBuildRequest struct {
 	ImageRepository    string `json:"imageRepository"`
 	ImageTag           string `json:"imageTag"`
 	Image              string `json:"image"`
-	SourceContext      string `json:"sourceContext,omitempty"`
-	SourceRevision     string `json:"sourceRevision,omitempty"`
 }
 
 type ImageBuildDispatcher interface {
 	DispatchImageBuild(context.Context, ImageBuildRequest) error
 }
 
-func newImageBuildPlanner(registryPrefix, sourceContext, sourceRevision string) (imageBuildPlanner, error) {
-	sourceContext = strings.TrimSpace(sourceContext)
-	sourceRevision = strings.TrimSpace(sourceRevision)
-	if sourceContext == "" {
-		return imageBuildPlanner{}, fmt.Errorf("platformk8s/cliruntime: image build source context is required")
-	}
-	if sourceRevision == "" {
-		sourceRevision = "main"
-	}
+func newImageBuildPlanner(registryPrefix string) (imageBuildPlanner, error) {
 	references, err := newImageReferencePlanner(registryPrefix)
 	if err != nil {
 		return imageBuildPlanner{}, err
 	}
 	return imageBuildPlanner{
 		imageReferencePlanner: references,
-		SourceContext:         sourceContext,
-		SourceRevision:        sourceRevision,
 	}, nil
 }
 
 func (p imageBuildPlanner) RequestsForChanges(changes []cliversions.VersionChange) []ImageBuildRequest {
-	requests := p.imageReferencePlanner.RequestsForChanges(changes)
-	for i := range requests {
-		requests[i].SourceContext = strings.TrimSpace(p.SourceContext)
-		requests[i].SourceRevision = strings.TrimSpace(p.SourceRevision)
-	}
-	return requests
+	return p.imageReferencePlanner.RequestsForChanges(changes)
 }
 
 func imageBuildRequestID(cliID, version, buildTarget string) string {

@@ -80,11 +80,11 @@ func SortByVendor(byVendor map[string]map[string]*CollectedEntry) map[string][]*
 
 // RichModelProjection holds the output of a rich model projection callback.
 type RichModelProjection struct {
-	Owner         string
-	RawModelID    string
-	Definition    *modelv1.ModelVersion // may include capabilities, modalities, contextSpec
-	Source        *CollectedSource
-	Pricing       *modelservicev1.PricingSummary
+	Owner      string
+	RawModelID string
+	Definition *modelv1.ModelVersion // may include capabilities, modalities, contextSpec
+	Source     *CollectedSource
+	Pricing    *modelservicev1.PricingSummary
 }
 
 // NormalizeRichModels is like NormalizeHostedModels but accepts a richer projection

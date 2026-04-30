@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"code-code.internal/platform-k8s/internal/platform/state"
 	"code-code.internal/platform-k8s/internal/platform/telemetry"
 	"code-code.internal/platform-k8s/internal/platform/temporalruntime"
+	"code-code.internal/platform-k8s/internal/platform/triggerhttp"
 	"code-code.internal/platform-k8s/internal/supportservice"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -50,10 +52,9 @@ func main() {
 	must(err)
 	registryConcurrency, err := positiveIntEnv("PLATFORM_SUPPORT_SERVICE_REGISTRY_LIST_CONCURRENCY")
 	must(err)
-	sourceContext := envOrDefault("PLATFORM_SUPPORT_SERVICE_IMAGE_BUILD_SOURCE_CONTEXT", "")
-	sourceRevision := envOrDefault("PLATFORM_SUPPORT_SERVICE_IMAGE_BUILD_SOURCE_REVISION", "")
 	domainEventsNATSURL := envOrDefault("PLATFORM_SUPPORT_SERVICE_DOMAIN_EVENTS_NATS_URL", "")
 	databaseURL := firstEnv("PLATFORM_DATABASE_URL", "PLATFORM_SUPPORT_SERVICE_DATABASE_URL")
+	internalActionToken := strings.TrimSpace(os.Getenv("PLATFORM_SUPPORT_SERVICE_INTERNAL_ACTION_TOKEN"))
 
 	telemetryShutdown, err := telemetry.Setup(context.Background(), envOrDefault("OTEL_SERVICE_NAME", "platform-support-service"))
 	must(err)
@@ -61,7 +62,7 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := telemetryShutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown telemetry failed: %v", err)
+			slog.Error("shutdown telemetry failed", "error", err)
 		}
 	}()
 
@@ -88,8 +89,6 @@ func main() {
 		VersionSyncer:  versionSyncer,
 		Dispatcher:     eventDispatcher,
 		ImageRegistry:  imageRegistry,
-		SourceContext:  sourceContext,
-		SourceRevision: sourceRevision,
 		Logger:         slog.Default(),
 	})
 	must(err)
@@ -120,6 +119,20 @@ func main() {
 	must(err)
 	defer temporalRuntime.Stop()
 
+	triggerServer, err := triggerhttp.NewServer(triggerhttp.Config{
+		Logger: slog.Default(),
+		Actions: map[string]triggerhttp.ActionFunc{
+			"sync-cli-versions": func(ctx context.Context, _ triggerhttp.Request) (any, error) {
+				return service.SyncCLIVersions(ctx)
+			},
+		},
+		AuthToken: internalActionToken,
+	})
+	must(err)
+	if internalActionToken == "" {
+		slog.Info("internal action endpoints are disabled (env PLATFORM_SUPPORT_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
+	}
+
 	grpcListener, err := net.Listen("tcp", grpcAddr)
 	must(err)
 	httpListener, err := net.Listen("tcp", httpAddr)
@@ -129,6 +142,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+	httpMux.Handle("/internal/actions/", triggerServer)
 	httpServer := &http.Server{Handler: httpMux}
 	grpcServer := grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	cliruntimev1.RegisterCLIRuntimeServiceServer(grpcServer, grpcService)
@@ -145,12 +159,12 @@ func main() {
 	}
 	go func() {
 		if err := supportservice.SyncStartupExternalAccessSets(ctx, egressClient); err != nil && ctx.Err() == nil {
-			log.Printf("startup external access sync failed: %v", err)
+			slog.Error("startup external access sync failed", "error", err)
 		}
 	}()
 	go func() {
 		if err := supportservice.SyncStartupRuntimeTelemetryProfiles(ctx, supportServer, egressClient); err != nil && ctx.Err() == nil {
-			log.Printf("startup runtime telemetry sync failed: %v", err)
+			slog.Error("startup runtime telemetry sync failed", "error", err)
 		}
 	}()
 	serveErr := make(chan error, 2)
@@ -175,7 +189,7 @@ func main() {
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("platform-support-service starting (namespace=%s run_namespace=%s grpc=%s http=%s temporal=%s/%s)", namespace, runNamespace, grpcAddr, httpAddr, temporalConfig.Address, temporalConfig.TaskQueue)
+	slog.Info("platform-support-service starting", "namespace", namespace, "run_namespace", runNamespace, "grpc", grpcAddr, "http", httpAddr, "temporal", temporalConfig.Address+"/"+temporalConfig.TaskQueue)
 	select {
 	case err := <-serveErr:
 		must(err)
@@ -202,11 +216,12 @@ func startDomainEventRuntime(ctx context.Context, pool *pgxpool.Pool, outbox *do
 	}, dispatcher.HandleDomainEvent)
 	must(err)
 	go func() { _ = consumer.Run(ctx) }()
-	log.Printf("domain event bus enabled (nats=%s)", natsURL)
+	slog.Info("domain event bus enabled", "nats", natsURL)
 }
 
 func must(err error) {
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("fatal error", "error", err)
+		os.Exit(1)
 	}
 }

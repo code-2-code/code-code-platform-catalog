@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -20,10 +19,12 @@ import (
 	"code-code.internal/platform-k8s/internal/platform/domainevents"
 	"code-code.internal/platform-k8s/internal/platform/state"
 	"code-code.internal/platform-k8s/internal/platform/telemetry"
+	"code-code.internal/platform-k8s/internal/platform/temporalruntime"
 	"code-code.internal/platform-k8s/internal/platform/triggerhttp"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	temporalworker "go.temporal.io/sdk/worker"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
@@ -48,7 +49,7 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := telemetryShutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown telemetry failed: %v", err)
+			slog.Error("shutdown telemetry failed", "error", err)
 		}
 	}()
 
@@ -76,6 +77,18 @@ func main() {
 	})
 	must(err)
 
+	temporalRuntime, err := temporalruntime.Start(
+		context.Background(),
+		temporalruntime.ConfigFromEnv(modelservice.TemporalTaskQueue),
+		func(w temporalworker.Worker) error {
+			return modelservice.RegisterTemporalWorkflows(w, server)
+		},
+		modelservice.EnsureTemporalSchedules,
+	)
+	must(err)
+	defer temporalRuntime.Stop()
+	slog.Info("temporal worker started", "task_queue", modelservice.TemporalTaskQueue)
+
 	triggerServer, err := triggerhttp.NewServer(triggerhttp.Config{
 		Logger: slog.Default(),
 		Actions: map[string]triggerhttp.ActionFunc{
@@ -91,7 +104,7 @@ func main() {
 	})
 	must(err)
 	if internalActionToken == "" {
-		log.Printf("internal action endpoints are disabled (env PLATFORM_MODEL_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
+		slog.Info("internal action endpoints are disabled (env PLATFORM_MODEL_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
 	}
 
 	listener, err := net.Listen("tcp", grpcAddr)
@@ -131,7 +144,7 @@ func main() {
 		must(err)
 		defer publisher.Close()
 		go func() { _ = publisher.Run(ctx) }()
-		log.Printf("domain event publisher enabled (nats=%s)", domainEventsNATSURL)
+		slog.Info("domain event publisher enabled", "nats", domainEventsNATSURL)
 	}
 	serveErr := make(chan error, 2)
 	go func() { serveErr <- grpcServer.Serve(listener) }()
@@ -141,7 +154,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("platform-model-service starting (namespace=%s grpc=%s http=%s)", namespace, grpcAddr, httpAddr)
+	slog.Info("platform-model-service starting", "namespace", namespace, "grpc", grpcAddr, "http", httpAddr)
 	select {
 	case err := <-serveErr:
 		must(err)
@@ -173,6 +186,7 @@ func firstEnv(keys ...string) string {
 
 func must(err error) {
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("fatal error", "error", err)
+		os.Exit(1)
 	}
 }

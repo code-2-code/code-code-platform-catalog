@@ -10,36 +10,23 @@ import (
 )
 
 const buildAndPushScript = `
-case "${BUILD_TARGET}" in
-  claude-code-agent) agent_dir="claude-code"; cli_package="@anthropic-ai/claude-code" ;;
-  agent-cli-qwen) agent_dir="qwen-cli"; cli_package="@qwen-code/qwen-code" ;;
-  agent-cli-gemini) agent_dir="gemini-cli"; cli_package="@google/gemini-cli" ;;
-  *) echo "unknown build target ${BUILD_TARGET}" >&2; exit 2 ;;
-esac
-if [ -z "${SOURCE_CONTEXT}" ]; then
-  echo "source-context is required" >&2
+if [ -z "${DOCKERFILE_CONTENTS}" ]; then
+  echo "DOCKERFILE_CONTENTS is required" >&2
   exit 2
 fi
-build_context="${SOURCE_CONTEXT}"
-if [ -n "${SOURCE_REVISION}" ]; then
-  case "${SOURCE_CONTEXT}" in
-    *'#'*|*'?'*) ;;
-    *) build_context="${SOURCE_CONTEXT}#${SOURCE_REVISION}" ;;
-  esac
-fi
+dockerfile_dir="$(mktemp -d)"
+printf '%s' "${DOCKERFILE_CONTENTS}" >"${dockerfile_dir}/Dockerfile"
 cache_ref="${IMAGE_REPOSITORY}:buildcache"
 buildctl-daemonless.sh build \
-  --frontend=gateway.v0 \
-  --opt source=docker/dockerfile:1 \
-  --opt context="${build_context}" \
-  --opt filename="deploy/images/release/node-cli-agent.Dockerfile" \
-  --opt build-arg:AGENT_DIR="${agent_dir}" \
-  --opt build-arg:CLI_PACKAGE="${cli_package}" \
+  --frontend dockerfile.v0 \
+  --local dockerfile="${dockerfile_dir}" \
+  --opt build-arg:AGENT_DIR="${AGENT_DIR}" \
+  --opt build-arg:CLI_PACKAGE="${CLI_PACKAGE}" \
   --opt build-arg:CLI_VERSION="${CLI_VERSION}" \
   --opt build-arg:NPM_CONFIG_REGISTRY="${BUILD_NPM_REGISTRY}" \
-  --import-cache type=registry,ref="${cache_ref}" \
-  --export-cache type=registry,ref="${cache_ref}",mode=max \
-  --output type=image,name="${IMAGE}",push=true
+  --import-cache type=registry,ref="${cache_ref}",registry.insecure=true \
+  --export-cache type=registry,ref="${cache_ref}",mode=max,registry.insecure=true \
+  --output type=image,name="${IMAGE}",push=true,registry.insecure=true
 `
 
 const pruneOldTagsScript = `
@@ -94,13 +81,13 @@ func jobFailed(job *batchv1.Job) bool {
 
 func imageBuildSecurityContext() *corev1.SecurityContext {
 	return &corev1.SecurityContext{
-		AllowPrivilegeEscalation: boolPtr(false),
-		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		AllowPrivilegeEscalation: boolPtr(true),
 		ReadOnlyRootFilesystem:   boolPtr(false),
 		RunAsNonRoot:             boolPtr(true),
 		RunAsUser:                int64Ptr(1000),
 		RunAsGroup:               int64Ptr(1000),
-		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined},
+		AppArmorProfile:          &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeUnconfined},
 	}
 }
 

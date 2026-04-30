@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -39,8 +38,6 @@ func main() {
 	must(err)
 	registryConcurrency, err := positiveIntEnv("PLATFORM_CLI_RUNTIME_SERVICE_REGISTRY_LIST_CONCURRENCY")
 	must(err)
-	sourceContext := envOrDefault("PLATFORM_CLI_RUNTIME_SERVICE_IMAGE_BUILD_SOURCE_CONTEXT", "")
-	sourceRevision := envOrDefault("PLATFORM_CLI_RUNTIME_SERVICE_IMAGE_BUILD_SOURCE_REVISION", "")
 	domainEventsNATSURL := envOrDefault("PLATFORM_CLI_RUNTIME_SERVICE_DOMAIN_EVENTS_NATS_URL", "")
 	internalActionToken := strings.TrimSpace(os.Getenv("PLATFORM_CLI_RUNTIME_SERVICE_INTERNAL_ACTION_TOKEN"))
 	databaseURL := firstEnv("PLATFORM_DATABASE_URL", "PLATFORM_CLI_RUNTIME_SERVICE_DATABASE_URL")
@@ -51,7 +48,7 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := telemetryShutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown telemetry failed: %v", err)
+			slog.Error("shutdown telemetry failed", "error", err)
 		}
 	}()
 
@@ -73,8 +70,6 @@ func main() {
 		VersionSyncer:  versionSyncer,
 		Dispatcher:     eventDispatcher,
 		ImageRegistry:  imageRegistry,
-		SourceContext:  sourceContext,
-		SourceRevision: sourceRevision,
 		Logger:         slog.Default(),
 	})
 	must(err)
@@ -98,7 +93,7 @@ func main() {
 	})
 	must(err)
 	if internalActionToken == "" {
-		log.Printf("internal action endpoints are disabled (env PLATFORM_CLI_RUNTIME_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
+		slog.Info("internal action endpoints are disabled (env PLATFORM_CLI_RUNTIME_SERVICE_INTERNAL_ACTION_TOKEN is empty)")
 	}
 
 	grpcListener, err := net.Listen("tcp", grpcAddr)
@@ -138,7 +133,7 @@ func main() {
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("platform-cli-runtime-service starting (namespace=%s run_namespace=%s grpc=%s http=%s)", namespace, runNamespace, grpcAddr, httpAddr)
+	slog.Info("platform-cli-runtime-service starting", "namespace", namespace, "run_namespace", runNamespace, "grpc", grpcAddr, "http", httpAddr)
 	select {
 	case err := <-serveErr:
 		must(err)
@@ -153,11 +148,12 @@ func startDomainEventRuntime(ctx context.Context, outbox *domainevents.Outbox, n
 	})
 	must(err)
 	go func() { _ = publisher.Run(ctx) }()
-	log.Printf("domain event publisher enabled (nats=%s)", natsURL)
+	slog.Info("domain event publisher enabled", "nats", natsURL)
 }
 
 func must(err error) {
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("fatal error", "error", err)
+		os.Exit(1)
 	}
 }

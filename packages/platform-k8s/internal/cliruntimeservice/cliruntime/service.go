@@ -21,8 +21,6 @@ type Config struct {
 	VersionSyncer  VersionSyncer
 	Dispatcher     ImageBuildDispatcher
 	ImageRegistry  string
-	SourceContext  string
-	SourceRevision string
 	Logger         *slog.Logger
 	SyncTimeout    time.Duration
 }
@@ -52,18 +50,18 @@ func NewService(config Config) (*Service, error) {
 		config.SyncTimeout = cliVersionSyncTimeout
 	}
 	var planner *imageBuildPlanner
-	imageBuildConfigured := strings.TrimSpace(config.ImageRegistry) != "" || strings.TrimSpace(config.SourceContext) != ""
+	imageBuildConfigured := strings.TrimSpace(config.ImageRegistry) != ""
 	if imageBuildConfigured {
 		if config.Dispatcher == nil {
 			return nil, fmt.Errorf("platformk8s/cliruntime: image build dispatcher is nil")
 		}
-		imageBuildPlanner, err := newImageBuildPlanner(config.ImageRegistry, config.SourceContext, config.SourceRevision)
+		imageBuildPlanner, err := newImageBuildPlanner(config.ImageRegistry)
 		if err != nil {
 			return nil, err
 		}
 		planner = &imageBuildPlanner
 	} else {
-		config.Logger.Warn("cli image build disabled", "reason", "image registry and source context are not configured")
+		config.Logger.Warn("cli image build disabled", "reason", "image registry is not configured")
 	}
 	return &Service{
 		versionSyncer: config.VersionSyncer,

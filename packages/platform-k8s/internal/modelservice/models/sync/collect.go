@@ -11,7 +11,7 @@ import (
 
 	modelservicev1 "code-code.internal/go-contract/platform/model/v1"
 	"code-code.internal/platform-k8s/internal/platform/outboundhttp"
-	vendorsupport "code-code.internal/platform-k8s/internal/supportservice/vendors/support"
+	vendorsupport "code-code.internal/platform-k8s/internal/platform/vendors/support"
 )
 
 const defaultDefinitionSourceCollectorTimeout = 10 * time.Second

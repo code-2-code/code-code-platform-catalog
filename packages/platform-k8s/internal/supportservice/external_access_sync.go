@@ -6,7 +6,7 @@ import (
 	"time"
 
 	egressservicev1 "code-code.internal/go-contract/platform/egress/v1"
-	vendorsupport "code-code.internal/platform-k8s/internal/supportservice/vendors/support"
+	vendorsupport "code-code.internal/platform-k8s/internal/platform/vendors/support"
 	"google.golang.org/grpc"
 )
 

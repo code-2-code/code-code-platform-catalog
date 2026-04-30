@@ -18,14 +18,15 @@ func TestSyncStartupExternalAccessSetsRetriesUntilSuccess(t *testing.T) {
 	if err := syncStartupExternalAccessSets(context.Background(), client, time.Millisecond); err != nil {
 		t.Fatalf("syncStartupExternalAccessSets() error = %v", err)
 	}
-	if got, want := client.calls(), 4; got != want {
+	if got, want := client.calls(), 5; got != want {
 		t.Fatalf("calls = %d, want %d", got, want)
 	}
 	if got, want := client.accessSetIDs(), []string{
-		"support.external-rule-set.bootstrap",
-		"support.external-rule-set.bootstrap",
-		"support.external-rule-set.bootstrap",
 		"support.proxy-preset.preset-proxy",
+		"support.proxy-preset.preset-proxy",
+		"support.proxy-preset.preset-proxy",
+		"support.external-rule-set.bootstrap",
+		"support.external-rule-set.model-catalog-sources",
 	}; !equalStrings(got, want) {
 		t.Fatalf("access set ids = %v, want %v", got, want)
 	}

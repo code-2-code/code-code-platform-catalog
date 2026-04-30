@@ -125,4 +125,3 @@ func MergePricingSummary(primary *modelservicev1.PricingSummary, fallback *model
 	}
 	return NormalizePricingSummary(primary)
 }
-

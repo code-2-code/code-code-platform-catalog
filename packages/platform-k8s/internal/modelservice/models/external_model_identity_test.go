@@ -27,4 +27,3 @@ func TestNormalizeExternalModelIdentityNormalizesCalendarReleaseSuffixes(t *test
 		t.Fatalf("alias value = %q, want %q", got, want)
 	}
 }
-

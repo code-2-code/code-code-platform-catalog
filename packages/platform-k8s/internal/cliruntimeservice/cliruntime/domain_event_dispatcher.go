@@ -43,8 +43,6 @@ func (d *DomainEventDispatcher) DispatchImageBuild(ctx context.Context, request 
 				ImageRepository:    request.ImageRepository,
 				ImageTag:           request.ImageTag,
 				Image:              request.Image,
-				SourceContext:      request.SourceContext,
-				SourceRevision:     request.SourceRevision,
 			},
 		}},
 	})

@@ -4,7 +4,6 @@ import (
 	models "code-code.internal/platform-k8s/internal/modelservice/models"
 	"slices"
 	"strings"
-
 )
 
 type configuredVendorScope struct {
@@ -72,7 +71,6 @@ func (s configuredVendorScope) canonicalVendorID(raw string) (string, bool) {
 	return "", false
 }
 
-
 func (s configuredVendorScope) configuredVendorID(raw string) (string, bool) {
 	vendorID := models.NormalizedVendorSlug(raw)
 	if canonical, ok := s.aliases[vendorID]; ok {
@@ -106,4 +104,3 @@ func appendUniqueString(values []string, candidate string) []string {
 	}
 	return append(values, candidate)
 }
-

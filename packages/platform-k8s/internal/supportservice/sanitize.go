@@ -15,7 +15,6 @@ func sanitizeVendor(in *supportv1.Vendor) *supportv1.Vendor {
 			continue
 		}
 		binding.EgressPolicy = nil
-		binding.Observability = nil
 		binding.ModelDiscovery = nil
 	}
 	return next
@@ -28,7 +27,6 @@ func sanitizeCLI(in *supportv1.CLI) *supportv1.CLI {
 	next := proto.Clone(in).(*supportv1.CLI)
 	if oauth := next.GetOauth(); oauth != nil {
 		oauth.AuthMaterialization = nil
-		oauth.Observability = nil
 		oauth.ModelCatalog = nil
 	}
 	for _, support := range next.GetApiKeyProtocols() {

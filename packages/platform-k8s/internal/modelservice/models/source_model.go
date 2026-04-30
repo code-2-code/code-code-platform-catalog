@@ -151,7 +151,6 @@ func CompareCollectedSource(left *modelservicev1.CollectedModelSource, right *mo
 	return strings.Compare(left.GetSourceModelId(), right.GetSourceModelId())
 }
 
-
 func CloneModelDefinition(in *modelv1.ModelVersion) *modelv1.ModelVersion {
 	if in == nil {
 		return nil

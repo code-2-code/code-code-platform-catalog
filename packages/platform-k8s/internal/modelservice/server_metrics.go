@@ -109,7 +109,6 @@ func (m *serverMetrics) recordOp(counter otelmetric.Int64Counter, histogram otel
 	histogram.Record(ctx, time.Since(started).Seconds(), options)
 }
 
-
 func metricsOutcome(err error) string {
 	if err == nil {
 		return "success"

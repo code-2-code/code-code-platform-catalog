@@ -19,7 +19,5 @@ func imageBuildRequestFromProto(input *domaineventv1.CLIImageBuildRequest) Image
 		ImageRepository:    strings.TrimSpace(input.GetImageRepository()),
 		ImageTag:           strings.TrimSpace(input.GetImageTag()),
 		Image:              strings.TrimSpace(input.GetImage()),
-		SourceContext:      strings.TrimSpace(input.GetSourceContext()),
-		SourceRevision:     strings.TrimSpace(input.GetSourceRevision()),
 	}
 }

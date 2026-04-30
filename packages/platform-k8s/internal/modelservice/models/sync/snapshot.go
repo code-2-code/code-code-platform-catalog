@@ -83,8 +83,6 @@ func mergeCollectedDefinitionsSnapshot(snapshot *collectedDefinitionsSnapshot, g
 	return snapshot
 }
 
-
-
 func cloneStringSet(values map[string]struct{}) map[string]struct{} {
 	if len(values) == 0 {
 		return map[string]struct{}{}
@@ -109,6 +107,3 @@ func cloneStringSliceMap(values map[string][]string) map[string][]string {
 	}
 	return out
 }
-
-
-

@@ -10,10 +10,9 @@ import (
 	clidefinitionv1 "code-code.internal/go-contract/cli_definition/v1"
 	observabilityv1 "code-code.internal/go-contract/observability/v1"
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
-	cliidentity "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/identity"
-	clisupport "code-code.internal/platform-k8s/internal/supportservice/clidefinitions/support"
-	"code-code.internal/platform-k8s/internal/supportservice/providersurfaces"
-	vendorsupport "code-code.internal/platform-k8s/internal/supportservice/vendors/support"
+	cliidentity "code-code.internal/platform-k8s/internal/platform/clidefinitions/identity"
+	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
+	vendorsupport "code-code.internal/platform-k8s/internal/platform/vendors/support"
 	"google.golang.org/protobuf/proto"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -28,7 +27,6 @@ type Server struct {
 
 	vendors          *vendorsupport.ManagementService
 	clis             *clisupport.ManagementService
-	surfaces         *providersurfaces.Service
 	runtimeTelemetry *observabilityv1.ObservabilityCapability
 }
 
@@ -47,10 +45,6 @@ func NewServer(config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	surfaces, err := providersurfaces.NewService(clis, vendors)
-	if err != nil {
-		return nil, err
-	}
 	runtimeTelemetry, err := loadRuntimeTelemetryProfiles()
 	if err != nil {
 		return nil, err
@@ -58,7 +52,6 @@ func NewServer(config Config) (*Server, error) {
 	return &Server{
 		vendors:          vendors,
 		clis:             clis,
-		surfaces:         surfaces,
 		runtimeTelemetry: runtimeTelemetry,
 	}, nil
 }
@@ -83,21 +76,7 @@ func (s *Server) GetVendor(ctx context.Context, request *supportv1.GetVendorRequ
 	return &supportv1.GetVendorResponse{Item: sanitizeVendor(item)}, nil
 }
 
-func (s *Server) ListProviderSurfaces(ctx context.Context, _ *supportv1.ListProviderSurfacesRequest) (*supportv1.ListProviderSurfacesResponse, error) {
-	items, err := s.surfaces.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &supportv1.ListProviderSurfacesResponse{Items: items}, nil
-}
 
-func (s *Server) GetProviderSurface(ctx context.Context, request *supportv1.GetProviderSurfaceRequest) (*supportv1.GetProviderSurfaceResponse, error) {
-	item, err := s.surfaces.Get(ctx, request.GetSurfaceId())
-	if err != nil {
-		return nil, err
-	}
-	return &supportv1.GetProviderSurfaceResponse{Item: item}, nil
-}
 
 func (s *Server) ListCLIs(ctx context.Context, _ *supportv1.ListCLIsRequest) (*supportv1.ListCLIsResponse, error) {
 	items, err := s.clis.List(ctx)
