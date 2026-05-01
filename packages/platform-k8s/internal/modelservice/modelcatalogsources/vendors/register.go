@@ -53,8 +53,8 @@ func hasCatalogCapability(vendor *supportv1.Vendor) bool {
 	if vendor == nil {
 		return false
 	}
-	for _, binding := range vendor.GetProviderBindings() {
-		if vendorsupport.SupportsModelCatalogProbe(binding) {
+	for _, surface := range vendor.GetSurfaces() {
+		if vendorsupport.SurfaceSupportsModelCatalogProbe(surface) {
 			return true
 		}
 	}

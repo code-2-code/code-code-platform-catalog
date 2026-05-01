@@ -10,13 +10,6 @@ func sanitizeVendor(in *supportv1.Vendor) *supportv1.Vendor {
 		return &supportv1.Vendor{}
 	}
 	next := proto.Clone(in).(*supportv1.Vendor)
-	for _, binding := range next.GetProviderBindings() {
-		if binding == nil {
-			continue
-		}
-		binding.EgressPolicy = nil
-		binding.ModelDiscovery = nil
-	}
 	return next
 }
 
@@ -25,15 +18,6 @@ func sanitizeCLI(in *supportv1.CLI) *supportv1.CLI {
 		return &supportv1.CLI{}
 	}
 	next := proto.Clone(in).(*supportv1.CLI)
-	if oauth := next.GetOauth(); oauth != nil {
-		oauth.AuthMaterialization = nil
-		oauth.ModelCatalog = nil
-	}
-	for _, support := range next.GetApiKeyProtocols() {
-		if support != nil {
-			support.AuthMaterialization = nil
-		}
-	}
 	next.EgressPolicy = nil
 	return next
 }

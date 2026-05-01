@@ -13,6 +13,7 @@ import (
 	cliidentity "code-code.internal/platform-k8s/internal/platform/clidefinitions/identity"
 	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
 	vendorsupport "code-code.internal/platform-k8s/internal/platform/vendors/support"
+	"code-code.internal/platform-k8s/internal/supportservice/productinfo"
 	"google.golang.org/protobuf/proto"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -28,6 +29,7 @@ type Server struct {
 	vendors          *vendorsupport.ManagementService
 	clis             *clisupport.ManagementService
 	runtimeTelemetry *observabilityv1.ObservabilityCapability
+	productInfos     *productinfo.Service
 }
 
 func NewServer(config Config) (*Server, error) {
@@ -49,10 +51,15 @@ func NewServer(config Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	productInfoSvc, err := productinfo.NewService()
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
 		vendors:          vendors,
 		clis:             clis,
 		runtimeTelemetry: runtimeTelemetry,
+		productInfos:     productInfoSvc,
 	}, nil
 }
 
@@ -76,8 +83,6 @@ func (s *Server) GetVendor(ctx context.Context, request *supportv1.GetVendorRequ
 	return &supportv1.GetVendorResponse{Item: sanitizeVendor(item)}, nil
 }
 
-
-
 func (s *Server) ListCLIs(ctx context.Context, _ *supportv1.ListCLIsRequest) (*supportv1.ListCLIsResponse, error) {
 	items, err := s.clis.List(ctx)
 	if err != nil {
@@ -99,6 +104,11 @@ func (s *Server) GetCLI(ctx context.Context, request *supportv1.GetCLIRequest) (
 		return nil, err
 	}
 	return &supportv1.GetCLIResponse{Item: sanitizeCLI(enrichCLI(item))}, nil
+}
+
+func (s *Server) ListProductInfos(ctx context.Context, _ *supportv1.ListProductInfosRequest) (*supportv1.ListProductInfosResponse, error) {
+	items := s.productInfos.List(ctx)
+	return &supportv1.ListProductInfosResponse{Items: items}, nil
 }
 
 func enrichCLI(in *supportv1.CLI) *supportv1.CLI {

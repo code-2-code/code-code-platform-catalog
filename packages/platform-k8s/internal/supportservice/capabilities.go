@@ -8,7 +8,7 @@ import (
 	apiprotocolv1 "code-code.internal/go-contract/api_protocol/v1"
 	credentialv1 "code-code.internal/go-contract/credential/v1"
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
-	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
+	"code-code.internal/platform-k8s/internal/platform/providersurfaces/registry"
 	vendorsupport "code-code.internal/platform-k8s/internal/platform/vendors/support"
 )
 
@@ -21,33 +21,9 @@ func (s *Server) ResolveProviderCapabilities(ctx context.Context, request *suppo
 		return s.resolveProviderCapabilitySubject(ctx, subject.Provider)
 	case *supportv1.ResolveProviderCapabilitiesRequest_CustomApi:
 		return s.resolveCustomAPICapabilitySubject(subject.CustomApi), nil
-	case *supportv1.ResolveProviderCapabilitiesRequest_Runtime:
-		return s.resolveRuntimeCapabilitySubject(ctx, subject.Runtime)
 	default:
 		return nil, fmt.Errorf("platformk8s/supportservice: capability subject is required")
 	}
-}
-
-func (s *Server) resolveRuntimeCapabilitySubject(ctx context.Context, subject *supportv1.RuntimeCapabilitySubject) (*supportv1.ResolveProviderCapabilitiesResponse, error) {
-	if subject == nil {
-		return nil, fmt.Errorf("platformk8s/supportservice: runtime capability subject is required")
-	}
-	response, err := s.resolveProviderCapabilitySubject(ctx, &supportv1.ProviderCapabilitySubject{
-		ProviderId:       subject.GetProviderId(),
-		SurfaceId:        subject.GetSurfaceId(),
-		Protocol:         subject.GetProtocol(),
-		Model:            subject.GetModel(),
-		CredentialKind:   subject.GetCredentialKind(),
-		RuntimeUrl:       subject.GetRuntimeUrl(),
-		ExecutionContext: subject.GetExecutionContext(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if key := strings.TrimSpace(subject.GetAuthMaterializationKey()); key != "" {
-		response.AuthMaterializationKey = key
-	}
-	return response, nil
 }
 
 func (s *Server) resolveProviderCapabilitySubject(ctx context.Context, subject *supportv1.ProviderCapabilitySubject) (*supportv1.ResolveProviderCapabilitiesResponse, error) {
@@ -56,20 +32,28 @@ func (s *Server) resolveProviderCapabilitySubject(ctx context.Context, subject *
 	}
 	providerID := strings.TrimSpace(subject.GetProviderId())
 	surfaceID := strings.TrimSpace(subject.GetSurfaceId())
-	protocol := subject.GetProtocol()
+	protocol := subject.GetEndpoint().GetApi().GetProtocol()
 	credentialKind := subject.GetCredentialKind()
+	if surfaceID == registry.SurfaceIDCustomAPIKey {
+		return s.resolveCustomAPICapabilitySubject(&supportv1.CustomAPICapabilitySubject{
+			BaseUrl:          subject.GetEndpoint().GetApi().GetBaseUrl(),
+			Protocol:         protocol,
+			CredentialKind:   credentialKind,
+			ExecutionContext: subject.GetExecutionContext(),
+		}), nil
+	}
 	if providerID == "" && surfaceID == "" {
 		return s.resolveProtocolCapability(protocol, credentialKind), nil
 	}
 	if cli, ok, err := s.cliByID(ctx, providerID); err != nil {
 		return nil, err
 	} else if ok {
-		return s.resolveCLICapability(cli, protocol, credentialKind), nil
+		_ = cli
 	}
-	if vendor, binding, ok, err := s.vendorBinding(ctx, providerID, surfaceID, protocol); err != nil {
+	if vendor, surface, ok, err := s.vendorSurface(ctx, providerID, surfaceID, protocol); err != nil {
 		return nil, err
 	} else if ok {
-		return resolveVendorSurfaceCapability(vendor, binding), nil
+		return resolveVendorSurfaceCapability(vendor, surface), nil
 	}
 	return s.resolveProtocolCapability(protocol, credentialKind), nil
 }
@@ -95,7 +79,7 @@ func (s *Server) cliByID(ctx context.Context, cliID string) (*supportv1.CLI, boo
 	return nil, false, nil
 }
 
-func (s *Server) vendorBinding(ctx context.Context, providerID string, surfaceID string, protocol apiprotocolv1.Protocol) (*supportv1.Vendor, *supportv1.VendorProviderBinding, bool, error) {
+func (s *Server) vendorSurface(ctx context.Context, providerID string, surfaceID string, protocol apiprotocolv1.Protocol) (*supportv1.Vendor, *supportv1.Surface, bool, error) {
 	items, err := s.vendors.List(ctx)
 	if err != nil {
 		return nil, nil, false, err
@@ -106,91 +90,62 @@ func (s *Server) vendorBinding(ctx context.Context, providerID string, surfaceID
 		if providerID != "" && providerID != strings.TrimSpace(vendor.GetVendor().GetVendorId()) {
 			continue
 		}
-		if binding := selectVendorBinding(vendor, surfaceID, protocol); binding != nil {
-			return vendor, binding, true, nil
+		if surface := selectVendorSurface(vendor, surfaceID, protocol); surface != nil {
+			return vendor, surface, true, nil
 		}
 	}
 	if providerID != "" {
 		for _, vendor := range items {
-			if binding := selectVendorBinding(vendor, surfaceID, protocol); binding != nil {
-				return vendor, binding, true, nil
+			if surface := selectVendorSurface(vendor, surfaceID, protocol); surface != nil {
+				return vendor, surface, true, nil
 			}
 		}
 	}
 	return nil, nil, false, nil
 }
 
-func selectVendorBinding(vendor *supportv1.Vendor, surfaceID string, protocol apiprotocolv1.Protocol) *supportv1.VendorProviderBinding {
-	for _, binding := range vendor.GetProviderBindings() {
-		if surfaceID != "" && vendorsupport.BindingSurfaceID(binding) != surfaceID {
+func selectVendorSurface(vendor *supportv1.Vendor, surfaceID string, protocol apiprotocolv1.Protocol) *supportv1.Surface {
+	for _, surface := range vendor.GetSurfaces() {
+		if surfaceID != "" && strings.TrimSpace(surface.GetSurfaceId()) != surfaceID {
 			continue
 		}
-		if protocol != apiprotocolv1.Protocol_PROTOCOL_UNSPECIFIED && !vendorBindingSupportsProtocol(binding, protocol) {
+		if !vendorsupport.SurfaceSupportsProtocol(surface, protocol) {
 			continue
 		}
-		return binding
+		return surface
 	}
 	return nil
 }
 
-func vendorBindingSupportsProtocol(binding *supportv1.VendorProviderBinding, protocol apiprotocolv1.Protocol) bool {
-	for _, template := range binding.GetSurfaceTemplates() {
-		if template.GetRuntime().GetApi().GetProtocol() == protocol {
-			return true
-		}
-	}
-	return false
-}
-
-func resolveVendorSurfaceCapability(vendor *supportv1.Vendor, binding *supportv1.VendorProviderBinding) *supportv1.ResolveProviderCapabilitiesResponse {
-	config := binding.GetProviderBinding()
-	policyID := strings.TrimSpace(config.GetEgressPolicyId())
-	observability := passiveHTTPObservability(binding.GetObservability())
+func resolveVendorSurfaceCapability(vendor *supportv1.Vendor, surface *supportv1.Surface) *supportv1.ResolveProviderCapabilitiesResponse {
+	policyID := vendorsupport.SurfaceEgressPolicyID(vendor, surface)
 	return &supportv1.ResolveProviderCapabilitiesResponse{
-		EgressPolicyId:      policyID,
-		AuthPolicyId:        strings.TrimSpace(config.GetHeaderRewritePolicyId()),
-		Observability:       observability,
-		ModelCatalogProbeId: strings.TrimSpace(config.GetModelCatalogProbeId()),
-		QuotaProbeId:        strings.TrimSpace(config.GetQuotaProbeId()),
-		ResourceRef:         strings.TrimSpace(vendor.GetVendor().GetVendorId()),
+		EgressPolicyId:        policyID,
+		AuthPolicyId:          vendorsupport.SurfaceAuthPolicyID(vendor, surface),
+		ObservabilityPolicyId: vendorsupport.SurfaceObservabilityPolicyID(surface),
+		ModelCatalogProbeId:   vendorsupport.SurfaceModelCatalogProbeID(surface),
+		QuotaProbeId:          vendorsupport.SurfaceQuotaProbeID(surface),
+		SurfaceId:             strings.TrimSpace(surface.GetSurfaceId()),
 	}
-}
-
-func (s *Server) resolveCLICapability(cli *supportv1.CLI, protocol apiprotocolv1.Protocol, credentialKind credentialv1.CredentialKind) *supportv1.ResolveProviderCapabilitiesResponse {
-	if credentialKind == credentialv1.CredentialKind_CREDENTIAL_KIND_OAUTH ||
-		(credentialKind == credentialv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED && cli.GetOauth() != nil) {
-		materialization, _ := clisupport.ResolveAuthMaterialization(cli, credentialv1.CredentialKind_CREDENTIAL_KIND_OAUTH, protocol)
-		policyID := clisupport.OAuthEgressPolicyID(cli)
-		return &supportv1.ResolveProviderCapabilitiesResponse{
-			EgressPolicyId:         policyID,
-			AuthPolicyId:           clisupport.OAuthHeaderRewritePolicyID(cli),
-			Observability:          passiveHTTPObservability(cli.GetOauth().GetObservability()),
-			ModelCatalogProbeId:    clisupport.OAuthModelCatalogProbeID(cli),
-			QuotaProbeId:           clisupport.OAuthQuotaProbeID(cli),
-			AuthMaterializationKey: strings.TrimSpace(materialization.GetMaterializationKey()),
-			ResourceRef:            strings.TrimSpace(cli.GetCliId()),
-		}
-	}
-	return s.resolveProtocolCapability(protocol, credentialKind)
 }
 
 func (s *Server) resolveProtocolCapability(protocol apiprotocolv1.Protocol, credentialKind credentialv1.CredentialKind) *supportv1.ResolveProviderCapabilitiesResponse {
 	protocolID := protocolPolicyID(protocol)
 	if credentialKind == credentialv1.CredentialKind_CREDENTIAL_KIND_OAUTH {
 		return &supportv1.ResolveProviderCapabilitiesResponse{
-			EgressPolicyId:         protocolID,
-			AuthPolicyId:           protocolID + ".oauth",
-			Observability:          s.protocolRuntimeTelemetry(protocol),
-			ModelCatalogProbeId:    protocolSurfaceID(protocol),
-			AuthMaterializationKey: protocolID + ".oauth",
+			EgressPolicyId:        protocolID,
+			AuthPolicyId:          protocolID + ".oauth",
+			ObservabilityPolicyId: protocolID,
+			ModelCatalogProbeId:   protocolSurfaceID(protocol),
+			SurfaceId:             protocolSurfaceID(protocol),
 		}
 	}
 	return &supportv1.ResolveProviderCapabilitiesResponse{
-		EgressPolicyId:         protocolID,
-		AuthPolicyId:           protocolID + ".api-key",
-		Observability:          s.protocolRuntimeTelemetry(protocol),
-		ModelCatalogProbeId:    protocolSurfaceID(protocol),
-		AuthMaterializationKey: protocolID + ".api-key",
+		EgressPolicyId:        protocolID,
+		AuthPolicyId:          protocolID + ".api-key",
+		ObservabilityPolicyId: protocolID,
+		ModelCatalogProbeId:   protocolSurfaceID(protocol),
+		SurfaceId:             protocolSurfaceID(protocol),
 	}
 }
 
@@ -203,8 +158,19 @@ func (s *Server) resolveCustomAPICapabilitySubject(subject *supportv1.CustomAPIC
 	}
 	response := s.resolveProtocolCapability(protocol, credentialKind)
 	response.EgressPolicyId = "custom.api"
-	response.ResourceRef = "custom.api"
+	response.SurfaceId = registry.SurfaceIDCustomAPIKey
+	response.ModelCatalogProbeId = customAPIModelCatalogProbeID(protocol)
+	response.QuotaProbeId = ""
 	return response
+}
+
+func customAPIModelCatalogProbeID(protocol apiprotocolv1.Protocol) string {
+	switch protocol {
+	case apiprotocolv1.Protocol_PROTOCOL_OPENAI_COMPATIBLE, apiprotocolv1.Protocol_PROTOCOL_OPENAI_RESPONSES:
+		return "surface.openai-compatible"
+	default:
+		return ""
+	}
 }
 
 func protocolPolicyID(protocol apiprotocolv1.Protocol) string {

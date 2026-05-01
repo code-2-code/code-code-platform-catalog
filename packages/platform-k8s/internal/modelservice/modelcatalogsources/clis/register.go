@@ -8,8 +8,6 @@ import (
 	supportv1 "code-code.internal/go-contract/platform/support/v1"
 	"code-code.internal/platform-k8s/internal/cliruntimeservice/cliversions"
 	"code-code.internal/platform-k8s/internal/modelservice/modelcatalogsources"
-	clioauth "code-code.internal/platform-k8s/internal/platform/clidefinitions/oauth"
-	clisupport "code-code.internal/platform-k8s/internal/platform/clidefinitions/support"
 	"google.golang.org/protobuf/proto"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -42,35 +40,8 @@ func Register(ctx context.Context, registry *modelcatalogsources.Registry, confi
 		if cliID == "" {
 			return fmt.Errorf("platformk8s/modelcatalogsources/clis: cli support id is empty")
 		}
-		if hasDefaultCatalog(cli) {
-			if err := registry.Register(&cliSource{
-				ref: modelcatalogsources.ProbeRef("cli." + cliID),
-			}); err != nil {
-				return err
-			}
-		}
-		if _, operation, err := clioauth.ResolveOAuthModelCatalogDiscovery(cli); err != nil {
-			return err
-		} else if operation != nil && config.Probe != nil {
-			probeID := strings.TrimSpace(clisupport.OAuthModelCatalogProbeID(cli))
-			if probeID == "" {
-				continue
-			}
-			if err := registry.Register(&cliSource{
-				ref: modelcatalogsources.ProbeRef(probeID),
-			}); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
-}
-
-func hasDefaultCatalog(cli *supportv1.CLI) bool {
-	if cli == nil || cli.GetOauth() == nil || cli.GetOauth().GetModelCatalog() == nil {
-		return false
-	}
-	return cli.GetOauth().GetModelCatalog().GetDefaultCatalog() != nil
 }
 
 type cliSource struct {

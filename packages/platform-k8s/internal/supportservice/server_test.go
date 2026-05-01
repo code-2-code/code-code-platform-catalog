@@ -34,8 +34,8 @@ func TestServerListCLIsReturnsSupportData(t *testing.T) {
 	if codex == nil {
 		t.Fatal("codex support data not found")
 	}
-	if codex.GetOauth().GetObservability() == nil {
-		t.Fatal("codex oauth observability = nil, want support observability profiles")
+	if codex.GetOauth() == nil {
+		t.Fatal("codex oauth = nil, want oauth support")
 	}
 }
 
@@ -58,12 +58,10 @@ func TestServerListVendorsReturnsSupportData(t *testing.T) {
 	if google == nil {
 		t.Fatal("google vendor support data not found")
 	}
-	if len(google.GetProviderBindings()) == 0 || google.GetProviderBindings()[0].GetObservability() == nil {
-		t.Fatal("google vendor observability = nil, want support observability profiles")
+	if len(google.GetSurfaces()) == 0 || google.GetSurfaces()[0].GetObservabilityPolicyId() == "" {
+		t.Fatal("google vendor observability_policy_id = empty")
 	}
 }
-
-
 
 func findCLI(items []*supportv1.CLI, cliID string) *supportv1.CLI {
 	for _, item := range items {
@@ -73,8 +71,6 @@ func findCLI(items []*supportv1.CLI, cliID string) *supportv1.CLI {
 	}
 	return nil
 }
-
-
 
 func findVendor(items []*supportv1.Vendor, vendorID string) *supportv1.Vendor {
 	for _, item := range items {
